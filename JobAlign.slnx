@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JobAlign.Api/JobAlign.Api.csproj" />
+    <Project Path="src/JobAlign.Core/JobAlign.Core.csproj" />
+    <Project Path="src/JobAlign.Infrastructure/JobAlign.Infrastructure.csproj" />
+    <Project Path="src/JobAlign.Web/JobAlign.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JobAlign.Tests/JobAlign.Tests.csproj" />
+  </Folder>
+</Solution>
