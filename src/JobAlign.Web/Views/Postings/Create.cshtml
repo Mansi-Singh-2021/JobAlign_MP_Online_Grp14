@@ -1,0 +1,45 @@
+@model CapturePostingViewModel
+@{ ViewData["Title"] = "Add a posting"; }
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9">
+        <h1 class="h3 mb-1">Add a posting</h1>
+        <p class="text-muted">
+            Paste the posting exactly as you found it. JobAlign keeps the original text
+            unchanged and works from a copy, so nothing you paste is ever rewritten.
+        </p>
+
+        <form asp-action="Create" method="post" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="RawText" class="form-label"></label>
+                <textarea asp-for="RawText" class="form-control font-monospace" rows="16"
+                          placeholder="Paste the full job posting here…"></textarea>
+                <span asp-validation-for="RawText" class="text-danger small"></span>
+            </div>
+
+            <div class="row">
+                <div class="col-12 col-sm-7 mb-3">
+                    <label asp-for="SourceName" class="form-label"></label>
+                    <input asp-for="SourceName" class="form-control" placeholder="LinkedIn, careers page, a friend…" />
+                    <div class="form-text">Optional.</div>
+                    <span asp-validation-for="SourceName" class="text-danger small"></span>
+                </div>
+                <div class="col-12 col-sm-5 mb-3">
+                    <label asp-for="CapturedOn" class="form-label"></label>
+                    <input asp-for="CapturedOn" type="date" class="form-control" />
+                    <div class="form-text">Optional — defaults to today.</div>
+                    <span asp-validation-for="CapturedOn" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save posting</button>
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

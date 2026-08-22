@@ -9,7 +9,7 @@ Built against SRS `JA-SRS-001 v1.0` — see [docs/JobAlign_Requirement_Analysis.
 
 ## Current status
 
-**The database layer is complete. The user interface is not built yet.**
+**Auth and posting capture are built. Extraction, matching and the dashboard are not.**
 
 Read that before following the run instructions, so the result is not a surprise.
 
@@ -20,13 +20,15 @@ Read that before following the run instructions, so the result is not a surprise
 | EF Core DbContext + configurations | Done |
 | `InitialSchema` migration, applied | Done — 31 tables |
 | Identity + roles registered in `Program.cs` | Done |
-| Register / sign-in screens | **Not built** |
-| Posting capture, extraction, matching, dashboard | **Not built** |
+| Role seeding, register / sign-in / sign-out / password reset | Done |
+| Paste a posting, list, view, archive, delete | Done |
+| Extraction, matching, skill gaps, dashboard | **Not built** |
 | AI integration | **Not built** — deliberately deferred |
 
-Running the app right now gives you the default ASP.NET Core MVC welcome page. It connects to
-the database successfully, but there are no JobAlign screens behind it yet. The next step is
-step 1 in the build order at the bottom of this file.
+Running the app gives you a working sign-up and sign-in, and a candidate can paste a posting
+and see it in their list. Postings are stored but not yet extracted, so a posting shows its
+original text and no structured detail. The next step is step 3 in the build order at the
+bottom of this file.
 
 ---
 
@@ -212,9 +214,9 @@ easy to break by accident:
 Work in sequence; do not jump ahead.
 
 0. ~~Schema, migration, database~~ — **done**
-1. Auth with roles — registration, sign-in, role seeding (FR-01 to FR-05) ← **next**
-2. Paste a posting → save → list it, with no AI at all (FR-06, FR-08, FR-09)
-3. `IJobExtractor` + `StubExtractor`, and the full review/correct UI against the stub (FR-12, FR-18)
+1. ~~Auth with roles — registration, sign-in, role seeding (FR-01 to FR-05)~~ — **done**
+2. ~~Paste a posting → save → list it, with no AI at all (FR-06, FR-08, FR-09)~~ — **done**
+3. `IJobExtractor` + `StubExtractor`, and the full review/correct UI against the stub (FR-12, FR-18) ← **next**
 4. Real `AiExtractor` behind the same interface
 5. Master skills, aliases, resolution (FR-14, FR-57, FR-58)
 6. Salary and location normalization (FR-15, FR-16)

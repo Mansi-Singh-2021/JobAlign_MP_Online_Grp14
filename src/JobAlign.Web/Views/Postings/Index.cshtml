@@ -1,0 +1,71 @@
+@model PostingListViewModel
+@{ ViewData["Title"] = "My postings"; }
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">My postings</h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary btn-sm"
+           asp-action="Index" asp-route-includeArchived="@(!Model.IncludeArchived)">
+            @(Model.IncludeArchived ? "Hide archived" : "Show archived")
+        </a>
+        <a class="btn btn-primary btn-sm" asp-action="Create">Add a posting</a>
+    </div>
+</div>
+
+@if (Model.Postings.Count == 0)
+{
+    <div class="text-center border rounded p-5 bg-light">
+        <p class="mb-3 text-muted">
+            @(Model.IncludeArchived
+                ? "You have not saved any postings yet."
+                : "Nothing here. Saved postings will appear in this list.")
+        </p>
+        <a class="btn btn-primary" asp-action="Create">Add your first posting</a>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Reference</th>
+                    <th scope="col">Posting</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Captured</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var posting in Model.Postings)
+            {
+                <tr class="@(posting.IsArchived ? "opacity-50" : null)">
+                    <td class="text-nowrap font-monospace small">@posting.Reference</td>
+                    <td>
+                        <a asp-action="Details" asp-route-id="@posting.Id">@posting.Preview</a>
+                        @if (posting.IsArchived)
+                        {
+                            <span class="badge text-bg-secondary ms-1">Archived</span>
+                        }
+                    </td>
+                    <td>@(posting.SourceName ?? "Not specified")</td>
+                    <td class="text-nowrap">@posting.CapturedAt.ToLocalTime().ToString("d MMM yyyy")</td>
+                    <td><span class="badge text-bg-light border">@posting.Status</span></td>
+                    <td class="text-end text-nowrap">
+                        <form asp-action="Archive" asp-route-id="@posting.Id" method="post" class="d-inline">
+                            <input type="hidden" name="isArchived" value="@((!posting.IsArchived).ToString())" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                @(posting.IsArchived ? "Restore" : "Archive")
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <p class="text-muted small mb-0">
+        Extracted details, match scores and skill gaps appear here once extraction is built.
+    </p>
+}

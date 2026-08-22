@@ -129,11 +129,15 @@ Work in this sequence. Do not jump ahead.
 0. ~~Schema: entities, DbContext, `InitialSchema` migration, database created.~~ **Done.**
    Built in full rather than incrementally, so later steps add code and not schema churn.
    From here on, follow the one-migration-per-logical-change rule below.
-1. Auth with roles: registration, sign-in, role seeding, `[Authorize]` (FR-01 to FR-05)
-   — DbContext and Identity are registered in `Program.cs`; no UI or seeding yet.
-2. Paste a posting → save → list it. **No AI at all.** (FR-06, FR-08, FR-09)
+1. ~~Auth with roles: registration, sign-in, role seeding, `[Authorize]` (FR-01 to FR-05)~~
+   **Done.** `RoleSeeder` runs at startup; `AccountController` covers register, sign-in,
+   sign-out and password reset. Authorization fails closed via a fallback policy, so a new
+   controller is protected unless it opts out with `[AllowAnonymous]`.
+2. ~~Paste a posting → save → list it. **No AI at all.**~~ (FR-06, FR-08, FR-09) **Done.**
+   `IJobPostingService` takes the owner id on every method, so BR-09 is enforced at the
+   service boundary rather than in the controller.
 3. `IJobExtractor` interface + `StubExtractor` returning canned JSON. Wire the full
-   review/correct UI against the stub. (FR-12, FR-18)
+   review/correct UI against the stub. (FR-12, FR-18) **← next**
 4. `AiExtractor` real implementation behind the same interface. Keep the stub for tests.
 5. Master skills, aliases, skill resolution (FR-14, FR-57, FR-58)
 6. Salary and location normalization (FR-15, FR-16)

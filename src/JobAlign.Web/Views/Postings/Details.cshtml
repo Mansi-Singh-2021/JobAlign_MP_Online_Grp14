@@ -1,0 +1,76 @@
+@model PostingDetailsViewModel
+@{ ViewData["Title"] = Model.Reference; }
+
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">
+            @Model.Reference
+            @if (Model.IsArchived)
+            {
+                <span class="badge text-bg-secondary align-middle">Archived</span>
+            }
+        </h1>
+        <p class="text-muted mb-0">
+            Captured @Model.CapturedAt.ToLocalTime().ToString("d MMMM yyyy")
+            from @(Model.SourceName ?? "an unspecified source")
+            by @(Model.CaptureMethod == PostingCaptureMethod.PastedText ? "pasting the text" : "a link").
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back to my postings</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Original posting text</span>
+                <span class="badge text-bg-light border">Never modified</span>
+            </div>
+            <div class="card-body">
+                @* BR-01/FR-08: displayed verbatim. Razor HTML-encodes this, so posting
+                   text containing markup is shown, not rendered. *@
+                <pre class="mb-0 small" style="white-space: pre-wrap; word-break: break-word;">@Model.RawText</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">Status</div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between">
+                    <span class="text-muted">Extraction</span>
+                    <span>@Model.Status</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                    <span class="text-muted">Application</span>
+                    <span>@Model.ApplicationStatus</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Extracted details</div>
+            <div class="card-body">
+                <p class="text-muted small mb-0">
+                    Not extracted yet. Job title, company, location, salary and skills appear
+                    here once the extraction step is built. Anything a posting does not state
+                    will read "Not specified" rather than being guessed.
+                </p>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2">
+            <form asp-action="Archive" asp-route-id="@Model.Id" method="post">
+                <input type="hidden" name="isArchived" value="@((!Model.IsArchived).ToString())" />
+                <button type="submit" class="btn btn-outline-secondary w-100">
+                    @(Model.IsArchived ? "Restore posting" : "Archive posting")
+                </button>
+            </form>
+            <form asp-action="Delete" asp-route-id="@Model.Id" method="post"
+                  onsubmit="return confirm('Delete @Model.Reference permanently? This cannot be undone.');">
+                <button type="submit" class="btn btn-outline-danger w-100">Delete posting</button>
+            </form>
+        </div>
+    </div>
+</div>
