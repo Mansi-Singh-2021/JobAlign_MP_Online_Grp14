@@ -64,4 +64,20 @@ public class PostingDetailsViewModel
     public ApplicationStatus ApplicationStatus { get; init; }
     public PostingCaptureMethod CaptureMethod { get; init; }
     public bool IsArchived { get; init; }
+
+    // ---- Extraction summary (FR-12, FR-18). Corrections are already applied (BR-03). ----
+
+    public bool HasExtraction { get; init; }
+    public ExtractionRunStatus? RunStatus { get; init; }
+    public string? FailureReason { get; init; }
+
+    /// <summary>Null means the posting did not state it — render "Not specified" (BR-02).</summary>
+    public string? JobTitle { get; init; }
+    public string? CompanyName { get; init; }
+    public string? Location { get; init; }
+
+    public int RequiredSkillCount { get; init; }
+    public int PreferredSkillCount { get; init; }
+
+    public bool IsExtractionFailed => RunStatus == ExtractionRunStatus.Failed;
 }

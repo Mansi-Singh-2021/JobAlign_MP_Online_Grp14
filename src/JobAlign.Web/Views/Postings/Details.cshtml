@@ -50,13 +50,52 @@
         </div>
 
         <div class="card mb-3">
-            <div class="card-header">Extracted details</div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Extracted details</span>
+                @if (Model.HasExtraction && !Model.IsExtractionFailed)
+                {
+                    <a class="small" asp-action="Review" asp-route-id="@Model.Id">Review &amp; correct</a>
+                }
+            </div>
             <div class="card-body">
-                <p class="text-muted small mb-0">
-                    Not extracted yet. Job title, company, location, salary and skills appear
-                    here once the extraction step is built. Anything a posting does not state
-                    will read "Not specified" rather than being guessed.
-                </p>
+                @if (!Model.HasExtraction)
+                {
+                    <p class="text-muted small mb-3">
+                        Not extracted yet. Extracting reads the original text and pulls out the
+                        job title, company, location, salary and skills.
+                    </p>
+                    <form asp-action="Extract" asp-route-id="@Model.Id" method="post">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">Extract details</button>
+                    </form>
+                }
+                else if (Model.IsExtractionFailed)
+                {
+                    @* FR-19 / NFR-06: a failed run never costs the candidate the posting. *@
+                    <p class="small mb-2 text-danger">Extraction failed.</p>
+                    <p class="small text-muted mb-3">@(Model.FailureReason ?? "No reason was recorded.")</p>
+                    <form asp-action="Extract" asp-route-id="@Model.Id" method="post">
+                        <button type="submit" class="btn btn-warning btn-sm w-100">Try again</button>
+                    </form>
+                }
+                else
+                {
+                    @* Unstated details read "Not specified" — never blank, never zero (BR-02, FR-17). *@
+                    <dl class="row mb-0 small">
+                        <dt class="col-5 text-muted fw-normal">Job title</dt>
+                        <dd class="col-7">@(Model.JobTitle ?? "Not specified")</dd>
+
+                        <dt class="col-5 text-muted fw-normal">Company</dt>
+                        <dd class="col-7">@(Model.CompanyName ?? "Not specified")</dd>
+
+                        <dt class="col-5 text-muted fw-normal">Location</dt>
+                        <dd class="col-7">@(Model.Location ?? "Not specified")</dd>
+
+                        <dt class="col-5 text-muted fw-normal">Skills</dt>
+                        <dd class="col-7">
+                            @Model.RequiredSkillCount required, @Model.PreferredSkillCount preferred
+                        </dd>
+                    </dl>
+                }
             </div>
         </div>
 

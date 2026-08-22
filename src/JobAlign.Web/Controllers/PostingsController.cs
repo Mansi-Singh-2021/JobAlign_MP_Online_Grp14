@@ -2,6 +2,7 @@ using System.Security.Claims;
 using JobAlign.Core.Abstractions;
 using JobAlign.Core.Entities.Identity;
 using JobAlign.Core.Entities.Postings;
+using JobAlign.Core.Enums;
 using JobAlign.Web.Models.Postings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,11 +24,16 @@ namespace JobAlign.Web.Controllers;
 public class PostingsController : Controller
 {
     private readonly IJobPostingService _postings;
+    private readonly IExtractionService _extraction;
     private readonly ILogger<PostingsController> _logger;
 
-    public PostingsController(IJobPostingService postings, ILogger<PostingsController> logger)
+    public PostingsController(
+        IJobPostingService postings,
+        IExtractionService extraction,
+        ILogger<PostingsController> logger)
     {
         _postings = postings;
+        _extraction = extraction;
         _logger = logger;
     }
 
@@ -80,6 +86,14 @@ public class PostingsController : Controller
         if (posting is null)
             return NotFound();
 
+        var extraction = await _extraction.GetCurrentAsync(id, CurrentUserId, cancellationToken);
+        var corrections = await _extraction.GetCorrectionsAsync(id, CurrentUserId, cancellationToken);
+        var skills = await _extraction.GetSkillsAsync(id, CurrentUserId, cancellationToken);
+
+        // Reuse the review builder so this page and the review screen agree on what a field
+        // says — both must show the correction where one stands, not the raw extraction (BR-03).
+        var review = ReviewViewModelBuilder.Build(posting, extraction, corrections, skills);
+
         return View(new PostingDetailsViewModel
         {
             Id = posting.Id,
@@ -90,8 +104,76 @@ public class PostingsController : Controller
             Status = posting.Status,
             ApplicationStatus = posting.ApplicationStatus,
             CaptureMethod = posting.CaptureMethod,
-            IsArchived = posting.IsArchived
+            IsArchived = posting.IsArchived,
+
+            HasExtraction = review.HasExtraction,
+            RunStatus = review.RunStatus,
+            FailureReason = review.FailureReason,
+            JobTitle = FieldValue(review, CorrectableFields.JobTitle),
+            CompanyName = FieldValue(review, CorrectableFields.CompanyName),
+            Location = FieldValue(review, CorrectableFields.RawLocationText),
+            RequiredSkillCount = review.RequiredSkills.Count,
+            PreferredSkillCount = review.PreferredSkills.Count
         });
+    }
+
+    // ---------------------------------------------------------------- extraction
+
+    /// <summary>
+    /// Runs extraction over the stored original text (FR-12, FR-21) and goes to review.
+    /// Re-runnable: the raw text is never re-captured and never altered (BR-01).
+    /// </summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Extract(int id, CancellationToken cancellationToken)
+    {
+        var extraction = await _extraction.RunAsync(id, CurrentUserId, cancellationToken);
+
+        if (extraction is null)
+            return NotFound();
+
+        TempData["StatusMessage"] = extraction.RunStatus == ExtractionRunStatus.Succeeded
+            ? "Extraction finished. Check the details below before confirming."
+            : "Extraction could not be completed. Your posting has been kept.";
+
+        return RedirectToAction(nameof(Review), new { id });
+    }
+
+    /// <summary>
+    /// Review and correct the extracted detail (FR-18). Shows the current extraction with
+    /// any standing corrections laid over it (BR-03).
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Review(int id, CancellationToken cancellationToken)
+    {
+        var posting = await _postings.GetForOwnerAsync(id, CurrentUserId, cancellationToken);
+
+        if (posting is null)
+            return NotFound();
+
+        var extraction = await _extraction.GetCurrentAsync(id, CurrentUserId, cancellationToken);
+        var corrections = await _extraction.GetCorrectionsAsync(id, CurrentUserId, cancellationToken);
+        var skills = await _extraction.GetSkillsAsync(id, CurrentUserId, cancellationToken);
+
+        return View(ReviewViewModelBuilder.Build(posting, extraction, corrections, skills));
+    }
+
+    /// <summary>
+    /// Saves the candidate's corrections and confirms the posting (FR-18, AC-10).
+    /// Confirming makes it eligible for scoring — Pending postings are never scored (BR-08).
+    /// </summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Confirm(ConfirmExtractionViewModel model, CancellationToken cancellationToken)
+    {
+        var confirmed = await _extraction.ApplyCorrectionsAsync(
+            model.PostingId, CurrentUserId, model.ToCorrections(), cancellationToken);
+
+        if (!confirmed)
+            return NotFound();
+
+        _logger.LogInformation("Posting {PostingId} confirmed by user {UserId}.", model.PostingId, CurrentUserId);
+
+        TempData["StatusMessage"] = "Details confirmed.";
+        return RedirectToAction(nameof(Details), new { id = model.PostingId });
     }
 
     /// <summary>Archive or restore (FR-11).</summary>
@@ -131,6 +213,9 @@ public class PostingsController : Controller
     private int CurrentUserId =>
         int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)
                   ?? throw new InvalidOperationException("Authenticated user has no identifier claim."));
+
+    private static string? FieldValue(ReviewExtractionViewModel review, string fieldName) =>
+        review.Fields.FirstOrDefault(f => f.FieldName == fieldName)?.Value;
 
     private static PostingListItemViewModel ToListItem(JobPosting posting) => new()
     {

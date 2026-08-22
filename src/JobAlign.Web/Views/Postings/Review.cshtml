@@ -1,0 +1,187 @@
+@model ReviewExtractionViewModel
+@{ ViewData["Title"] = $"Review {Model.Reference}"; }
+
+@* FR-18: every extracted detail is shown for review and any of it can be corrected
+   before the posting is confirmed. *@
+
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">Review extracted details</h1>
+        <p class="text-muted mb-0">
+            <span class="font-monospace">@Model.Reference</span>
+            @if (Model.ExtractedAt is { } at)
+            {
+                <span>· extracted @at.ToLocalTime().ToString("d MMM yyyy, HH:mm")</span>
+                <span class="badge text-bg-light border ms-1">@Model.ConfigVersion</span>
+            }
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Details" asp-route-id="@Model.PostingId">
+        Back to posting
+    </a>
+</div>
+
+@if (!Model.HasExtraction)
+{
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <p class="text-muted mb-3">This posting has not been extracted yet.</p>
+            <form asp-action="Extract" asp-route-id="@Model.PostingId" method="post" class="d-inline">
+                <button type="submit" class="btn btn-primary">Extract details</button>
+            </form>
+        </div>
+    </div>
+    return;
+}
+
+@if (Model.IsFailed)
+{
+    @* FR-19 / NFR-06: the posting survives a failed run. Say what went wrong and offer a retry. *@
+    <div class="alert alert-warning">
+        <h2 class="h6">Extraction could not be completed</h2>
+        <p class="mb-2">@(Model.FailureReason ?? "No reason was recorded.")</p>
+        <p class="mb-3 small">
+            Your posting and its original text are safe. This posting is marked
+            <strong>Pending</strong> and is left out of match scoring until it is extracted
+            and confirmed.
+        </p>
+        <form asp-action="Extract" asp-route-id="@Model.PostingId" method="post">
+            <button type="submit" class="btn btn-warning btn-sm">Try extraction again</button>
+        </form>
+    </div>
+    return;
+}
+
+@if (Model.Fields.Any(f => f.IsLowConfidence))
+{
+    @* FR-20, NFR-06: low-confidence values are flagged for the candidate to check. *@
+    <div class="alert alert-info py-2 small">
+        Some details were extracted with low confidence and are marked below. Please check them.
+    </div>
+}
+
+<form asp-action="Confirm" method="post">
+    <input type="hidden" asp-for="@Model.PostingId" name="PostingId" />
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-7">
+            <div class="card">
+                <div class="card-header">Extracted details</div>
+                <div class="card-body">
+                    @for (var i = 0; i < Model.Fields.Count; i++)
+                    {
+                        var field = Model.Fields[i];
+
+                        <div class="mb-3">
+                            <input type="hidden" name="Fields[@i].FieldName" value="@field.FieldName" />
+
+                            <label class="form-label mb-1" for="field-@field.FieldName">
+                                @field.Label
+                                @if (field.IsLowConfidence)
+                                {
+                                    <span class="badge text-bg-warning ms-1">Low confidence</span>
+                                }
+                                else if (field.Confidence is { } c)
+                                {
+                                    <span class="badge text-bg-light border ms-1">@c</span>
+                                }
+                                @if (field.IsCorrected)
+                                {
+                                    <span class="badge text-bg-primary ms-1">Corrected</span>
+                                }
+                            </label>
+
+                            @switch (field.InputKind)
+                            {
+                                case FieldInputKind.MultilineText:
+                                    <textarea id="field-@field.FieldName" name="Fields[@i].Value"
+                                              class="form-control" rows="4"
+                                              placeholder="Not specified">@field.Value</textarea>
+                                    break;
+
+                                case FieldInputKind.Number:
+                                    <input id="field-@field.FieldName" name="Fields[@i].Value"
+                                           type="number" step="any" class="form-control"
+                                           value="@field.Value" placeholder="Not specified" />
+                                    break;
+
+                                case FieldInputKind.RemotePolicyChoice:
+                                case FieldInputKind.SalaryPeriodChoice:
+                                    <select id="field-@field.FieldName" name="Fields[@i].Value" class="form-select">
+                                        @* The blank option is not padding: it is how the candidate says
+                                           the posting states nothing, which must stay null (BR-02, FR-17). *@
+                                        <option value="" selected="@(string.IsNullOrEmpty(field.Value))">
+                                            Not specified
+                                        </option>
+                                        @foreach (var option in field.Options)
+                                        {
+                                            <option value="@option" selected="@(option == field.Value)">@option</option>
+                                        }
+                                    </select>
+                                    break;
+
+                                default:
+                                    <input id="field-@field.FieldName" name="Fields[@i].Value"
+                                           type="text" class="form-control"
+                                           value="@field.Value" placeholder="Not specified" />
+                                    break;
+                            }
+
+                            @if (field.IsCorrected)
+                            {
+                                <div class="form-text">
+                                    Extracted as: @(string.IsNullOrEmpty(field.ExtractedValue)
+                                        ? "Not specified"
+                                        : field.ExtractedValue)
+                                </div>
+                            }
+                            else if (string.IsNullOrEmpty(field.Value))
+                            {
+                                <div class="form-text">Not specified in the posting.</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="card mb-3">
+                <div class="card-header">Skills</div>
+                <div class="card-body">
+                    @if (Model.RequiredSkills.Count == 0 && Model.PreferredSkills.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">
+                            No skills were stored for this posting. Skills are only kept once they
+                            match the master skill list, so that the same skill is never recorded
+                            under two names. An administrator can add missing skills, after which
+                            re-running extraction will pick them up.
+                        </p>
+                    }
+                    else
+                    {
+                        <partial name="_ExtractedSkillList"
+                                 model="@(new SkillListModel("Required", Model.RequiredSkills, "text-bg-danger"))" />
+                        <partial name="_ExtractedSkillList"
+                                 model="@(new SkillListModel("Preferred", Model.PreferredSkills, "text-bg-secondary"))" />
+                    }
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">Confirm details</button>
+                <button type="submit" class="btn btn-outline-secondary"
+                        formaction="@Url.Action("Extract", new { id = Model.PostingId })"
+                        formnovalidate>
+                    Re-run extraction
+                </button>
+            </div>
+            <p class="form-text mt-2">
+                Re-running reads the original text again. Anything you have corrected stays
+                corrected.
+            </p>
+        </div>
+    </div>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

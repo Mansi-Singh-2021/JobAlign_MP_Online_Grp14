@@ -1,0 +1,26 @@
+@model SkillListModel
+
+@* FR-13 / FR-43: required and preferred stay visually distinct. *@
+<div class="mb-3">
+    <h3 class="h6 text-muted mb-2">@Model.Heading (@Model.Skills.Count)</h3>
+
+    @if (Model.Skills.Count == 0)
+    {
+        <p class="small text-muted mb-0">None stated.</p>
+    }
+    else
+    {
+        <div class="d-flex flex-wrap gap-1">
+            @foreach (var skill in Model.Skills)
+            {
+                <span class="badge @Model.BadgeClass" title="@(skill.RawText is null ? null : $"Posting said: {skill.RawText}")">
+                    @skill.CanonicalName
+                    @if (skill.Source == PostingSkillSource.UserAdded)
+                    {
+                        <span class="ms-1">(added)</span>
+                    }
+                </span>
+            }
+        </div>
+    }
+</div>

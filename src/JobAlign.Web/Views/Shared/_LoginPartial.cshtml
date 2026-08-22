@@ -1,17 +1,24 @@
 @using Microsoft.AspNetCore.Identity
 @inject SignInManager<ApplicationUser> SignInManager
-@inject UserManager<ApplicationUser> UserManager
+
+@* The signed-in user's name comes from the authentication cookie's claims, so this
+   partial needs SignInManager only. Injecting UserManager as well would pull a
+   database-backed service into a view to read something already on User. *@
 
 <ul class="navbar-nav">
 @if (SignInManager.IsSignedIn(User))
 {
     <li class="nav-item">
-        <span class="nav-link text-dark">@UserManager.GetUserName(User)</span>
+        <span class="nav-link text-dark">@User.Identity!.Name</span>
     </li>
     <li class="nav-item">
-        @* Sign-out is a POST so it cannot be triggered by a link someone else planted (FR-04). *@
+        @* Sign-out is a POST so it cannot be triggered by a link someone else planted (FR-04).
+           text-decoration-none because Bootstrap underlines .btn-link, which would make this
+           the only underlined item in the navbar. *@
         <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
-            <button type="submit" class="nav-link btn btn-link text-dark border-0">Sign out</button>
+            <button type="submit" class="nav-link btn btn-link text-dark text-decoration-none border-0">
+                Sign out
+            </button>
         </form>
     </li>
 }
