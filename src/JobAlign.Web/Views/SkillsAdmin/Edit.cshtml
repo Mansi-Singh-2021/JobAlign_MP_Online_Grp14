@@ -1,0 +1,66 @@
+@model EditSkillViewModel
+@{ ViewData["Title"] = Model.IsNew ? "Add a skill" : $"Edit {Model.Name}"; }
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-7">
+        <h1 class="h3 mb-3">@(Model.IsNew ? "Add a skill" : "Edit skill")</h1>
+
+        @if (Model.IsMerged)
+        {
+            <div class="alert alert-info">
+                This skill was merged into <strong>@Model.MergedInto</strong>. It is kept so
+                existing postings and profiles that reference it can still be explained, and
+                anything naming it now resolves to @Model.MergedInto.
+            </div>
+        }
+
+        <form asp-action="Save" method="post" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <input type="hidden" asp-for="Id" />
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" autocomplete="off" />
+                <div class="form-text">
+                    Exactly as it should display — this is what candidates see.
+                    @if (!string.IsNullOrEmpty(Model.NormalizedPreview))
+                    {
+                        <span>Currently resolves as <code>@Model.NormalizedPreview</code>.</span>
+                    }
+                </div>
+                <span asp-validation-for="Name" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Category" class="form-label"></label>
+                <input asp-for="Category" class="form-control" list="categories" autocomplete="off"
+                       placeholder="Languages, Frameworks, Cloud, Data, Practice, Tools" />
+                <datalist id="categories">
+                    <option value="Languages"></option>
+                    <option value="Frameworks"></option>
+                    <option value="Cloud"></option>
+                    <option value="Data"></option>
+                    <option value="Practice"></option>
+                    <option value="Tools"></option>
+                </datalist>
+                <div class="form-text">Optional. Free text — categories are not a fixed list.</div>
+                <span asp-validation-for="Category" class="text-danger small"></span>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    @(Model.IsNew ? "Add skill" : "Save changes")
+                </button>
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                @if (!Model.IsNew)
+                {
+                    <a class="btn btn-link ms-auto" asp-action="Aliases" asp-route-id="@Model.Id">
+                        Manage aliases
+                    </a>
+                }
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

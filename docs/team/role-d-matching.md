@@ -105,8 +105,13 @@ candidate for something the posting never asked for.
 ### 2. `MatchScoringService.ScoreAsync`
 
 1. Load the posting filtered by `ownerUserId` (BR-09). Return null if not found.
-2. **Return null if `posting.Status != Confirmed`.** Pending postings are never scored
-   (BR-08, FR-54). `New` postings have no extracted skills yet, so there is nothing to score.
+2. **Return null if `posting.Status == Pending`.** That is the whole of BR-08 — Pending is
+   excluded from scoring, comparison and dashboard figures, and nothing else is.
+   **Score `New` postings too.** A posting extracted but not yet confirmed has real skills
+   worth measuring, and re-extraction resets a Confirmed posting back to New — skipping New
+   would silently drop it from the dashboard. A posting with no extraction at all has no
+   skills, so every component comes out null and the overall score is null: the correct
+   "not measurable" answer, needing no special case (BR-02).
 3. Load the candidate's `CandidateProfile` with its `ProfileSkill` rows.
 4. Load the posting's `PostingSkill` rows, split by `SkillType`.
 5. Compare on **`MasterSkillId`**, never on name strings. That is the whole reason B's
@@ -123,11 +128,11 @@ candidate for something the posting never asked for.
 
 ### 3. `RecalculateAllAsync` (FR-41, NFR-03)
 
-Called whenever the profile changes. Rescore every `Confirmed` posting for that candidate.
+Called whenever the profile changes. Rescore every non-`Pending` posting for that candidate.
 
 **Do not loop calling `ScoreAsync`** — that is N+1 queries and will miss the 30-second
 budget. Load the profile skills once into a `HashSet<int>` of master skill ids, load all
-confirmed postings with their skills in one query, compute in memory, then write.
+non-Pending postings with their skills in one query, compute in memory, then write.
 
 Return the number of postings rescored.
 
@@ -162,9 +167,10 @@ measure".** Getting this distinction right in both directions is the core of you
 - [ ] A posting whose preferred skills the candidate wholly lacks yields `0.00`, not null
 - [ ] A profile with null `TotalExperienceYears` yields `ExperienceScore = null`
 - [ ] A `Pending` posting is not scored at all (BR-08)
+- [ ] A `New` posting with extracted skills **is** scored
 - [ ] Skills are matched on `MasterSkillId`, and "c sharp" in a profile matches "C#" in a posting
 - [ ] `SkillGap` rows are written with the right `SkillType`
-- [ ] Changing the profile rescores every confirmed posting
+- [ ] Changing the profile rescores every non-Pending posting
 - [ ] Rescoring 50 postings issues a constant number of queries, not 50
 - [ ] `ScoringConfigVersion` is stored on every result
 - [ ] Rescoring does not blank `FeedbackText`
@@ -192,17 +198,18 @@ OverallScore_never_treats_a_null_component_as_zero
 
 ```
 ScoreAsync_refuses_a_Pending_posting
+ScoreAsync_scores_a_New_posting_that_has_extracted_skills
 ScoreAsync_refuses_another_users_posting
 ScoreAsync_writes_gaps_with_the_correct_skill_type
 ScoreAsync_preserves_existing_FeedbackText
-RecalculateAll_rescores_every_confirmed_posting
+RecalculateAll_rescores_every_non_pending_posting
 ```
 
 ## Dependencies
 
 | You need | From | Until then |
 |---|---|---|
-| `PostingSkill` rows on confirmed postings | A | **`ScoreCalculator` needs none of this** — build and test it first |
+| `PostingSkill` rows on extracted postings | A | **`ScoreCalculator` needs none of this** — build and test it first |
 | `ProfileSkill` rows and `TotalExperienceYears` | C | same |
 | Seeded master skills | B (Wave 0) | same |
 

@@ -3,6 +3,10 @@
 **Story:** US-05a · **Points:** 5 · **Branch:** `feat/a-extraction`
 **Critical path:** yes — you and B own Wave 0. Four people are blocked until it lands.
 
+> **STATUS: complete and merged.** Extraction pipeline, stub extractor, review/correct
+> UI and 26 tests are on `main`. Remaining in this lane: Member F swaps `StubExtractor`
+> for `AiExtractor` behind the same interface.
+
 > Read [00-SHARED-BRIEF.md](00-SHARED-BRIEF.md) and [01-CONTRACTS.md](01-CONTRACTS.md) first.
 
 ---

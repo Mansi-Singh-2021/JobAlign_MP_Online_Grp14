@@ -3,6 +3,14 @@
 **Story:** US-03 · **Points:** 5 · **Branch:** `feat/b-skills`
 **Critical path:** yes — you and A own Wave 0. A, C and D all depend on your resolver.
 
+> **STATUS: complete.** `SkillResolver`, `MasterSkillSeeder` (46 skills, 35 aliases), the
+> FR-57/FR-58 administrator screens and 23 tests are on `main` and green. Nothing in this
+> lane is outstanding.
+>
+> One addition worth knowing about: **merging repoints existing `PostingSkills` and
+> `ProfileSkills` to the surviving skill.** Scoring compares `MasterSkillId` directly, so
+> without that the merge would be invisible to match scores — see `SkillAdminService`.
+
 > Read [00-SHARED-BRIEF.md](00-SHARED-BRIEF.md) and [01-CONTRACTS.md](01-CONTRACTS.md) first.
 
 ---

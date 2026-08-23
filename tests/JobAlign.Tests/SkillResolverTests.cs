@@ -1,4 +1,5 @@
 using JobAlign.Core.Abstractions;
+using JobAlign.Core.Entities.Skills;
 using JobAlign.Infrastructure.Data;
 using JobAlign.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -53,10 +54,10 @@ public class SkillResolverTests
         // Seed a skill
         var skill = new MasterSkill
         {
-            SkillName = "C#",
+            Name = "C#",
             NormalizedName = "csharp",
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
         _context.MasterSkills.Add(skill);
         await _context.SaveChangesAsync();
@@ -73,18 +74,18 @@ public class SkillResolverTests
     {
         var skill = new MasterSkill
         {
-            SkillName = "Kubernetes",
+            Name = "Kubernetes",
             NormalizedName = "kubernetes",
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
         _context.MasterSkills.Add(skill);
         await _context.SaveChangesAsync();
 
         var alias = new SkillAlias
         {
-            SkillId = skill.Id,
-            AliasName = "K8s",
+            MasterSkillId = skill.Id,
+            Alias = "K8s",
             NormalizedAlias = "k8s"
         };
         _context.SkillAliases.Add(alias);
@@ -103,10 +104,10 @@ public class SkillResolverTests
         // Source skill
         var source = new MasterSkill
         {
-            SkillName = "OldName",
+            Name = "OldName",
             NormalizedName = "oldname",
             IsActive = false,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow,
             MergedIntoMasterSkillId = 2 // Will set after target created
         };
         _context.MasterSkills.Add(source);
@@ -115,10 +116,10 @@ public class SkillResolverTests
         // Target skill
         var target = new MasterSkill
         {
-            SkillName = "NewName",
+            Name = "NewName",
             NormalizedName = "newname",
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
         _context.MasterSkills.Add(target);
         await _context.SaveChangesAsync();
@@ -151,10 +152,10 @@ public class SkillResolverTests
     {
         var skill = new MasterSkill
         {
-            SkillName = "Deactivated",
+            Name = "Deactivated",
             NormalizedName = "deactivated",
             IsActive = false,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
         _context.MasterSkills.Add(skill);
         await _context.SaveChangesAsync();
@@ -170,10 +171,10 @@ public class SkillResolverTests
         // Seed a skill
         var skill = new MasterSkill
         {
-            SkillName = "C#",
+            Name = "C#",
             NormalizedName = "csharp",
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
         _context.MasterSkills.Add(skill);
         await _context.SaveChangesAsync();

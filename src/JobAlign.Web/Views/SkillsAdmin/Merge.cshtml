@@ -1,0 +1,56 @@
+@model MergeSkillsViewModel
+@{ ViewData["Title"] = "Merge skills"; }
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <h1 class="h3 mb-1">Merge two skills</h1>
+        <p class="text-muted">
+            Use this when the same skill was added twice under different names (FR-58).
+        </p>
+
+        <div class="alert alert-warning">
+            <strong>What happens.</strong> The merged-away skill is <em>kept</em>, marked as
+            merged and deactivated — postings and profiles that reference it stay explainable.
+            Its aliases move across, and its own name becomes an alias of the surviving skill,
+            so postings worded the old way keep resolving. Existing posting and profile skills
+            are repointed, so match scores treat them as one skill from now on.
+            <strong>This cannot be undone from the interface.</strong>
+        </div>
+
+        <form asp-action="Merge" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="SourceId" class="form-label"></label>
+                <select asp-for="SourceId" class="form-select">
+                    <option value="0">Choose a skill…</option>
+                    @foreach (var skill in Model.Candidates)
+                    {
+                        <option value="@skill.Id" selected="@(skill.Id == Model.SourceId)">@skill.Name</option>
+                    }
+                </select>
+                <div class="form-text">This one is retired.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="TargetId" class="form-label"></label>
+                <select asp-for="TargetId" class="form-select">
+                    <option value="0">Choose a skill…</option>
+                    @foreach (var skill in Model.Candidates)
+                    {
+                        <option value="@skill.Id" selected="@(skill.Id == Model.TargetId)">@skill.Name</option>
+                    }
+                </select>
+                <div class="form-text">This one survives and absorbs the other.</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger"
+                        onclick="return confirm('Merge these two skills? This cannot be undone here.');">
+                    Merge
+                </button>
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

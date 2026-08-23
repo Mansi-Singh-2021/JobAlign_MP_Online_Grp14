@@ -9,7 +9,8 @@ Built against SRS `JA-SRS-001 v1.0` — see [docs/JobAlign_Requirement_Analysis.
 
 ## Current status
 
-**Auth and posting capture are built. Extraction, matching and the dashboard are not.**
+**Auth, posting capture, extraction and skill resolution are built. Matching and the
+dashboard are not.**
 
 Read that before following the run instructions, so the result is not a surprise.
 
@@ -22,13 +23,17 @@ Read that before following the run instructions, so the result is not a surprise
 | Identity + roles registered in `Program.cs` | Done |
 | Role seeding, register / sign-in / sign-out / password reset | Done |
 | Paste a posting, list, view, archive, delete | Done |
-| Extraction, matching, skill gaps, dashboard | **Not built** |
-| AI integration | **Not built** — deliberately deferred |
+| Extract, review, correct, confirm — against a stub extractor | Done |
+| Master skills, aliases, skill resolution | Done |
+| Administrator skill screens — add, edit, deactivate, aliases, merge | Done |
+| Candidate profile, match scoring, skill gaps, dashboard | **Not built** |
+| Real AI integration | **Not built** — `StubExtractor` stands in |
 
-Running the app gives you a working sign-up and sign-in, and a candidate can paste a posting
-and see it in their list. Postings are stored but not yet extracted, so a posting shows its
-original text and no structured detail. The next step is step 3 in the build order at the
-bottom of this file.
+Running the app gives you sign-up, sign-in, and a candidate who can paste a posting, extract
+it, correct the extracted detail and confirm it. Skills resolve to the master list, so a
+posting saying "MSSQL" is stored as SQL Server. Extraction is a stub, not a real AI call.
+There is no candidate profile and no match score yet — steps 7 and 8 in the build order at
+the bottom of this file.
 
 ---
 
@@ -216,12 +221,12 @@ Work in sequence; do not jump ahead.
 0. ~~Schema, migration, database~~ — **done**
 1. ~~Auth with roles — registration, sign-in, role seeding (FR-01 to FR-05)~~ — **done**
 2. ~~Paste a posting → save → list it, with no AI at all (FR-06, FR-08, FR-09)~~ — **done**
-3. `IJobExtractor` + `StubExtractor`, and the full review/correct UI against the stub (FR-12, FR-18) ← **next**
+3. ~~`IJobExtractor` + `StubExtractor`, and the full review/correct UI~~ — **done**
 4. Real `AiExtractor` behind the same interface
-5. Master skills, aliases, resolution (FR-14, FR-57, FR-58)
+5. ~~Master skills, aliases, resolution, admin screens (FR-14, FR-57, FR-58)~~ — **done**
 6. Salary and location normalization (FR-15, FR-16)
-7. Candidate profile and skills (FR-27 to FR-29, FR-33)
-8. Match scoring (FR-35 to FR-41)
+7. Candidate profile and skills (FR-27 to FR-29, FR-33) ← **next**
+8. Match scoring (FR-35 to FR-41) ← **next**
 9. Skill gap and roadmap (FR-42 to FR-46)
 10. Dashboard, filter, sort, compare (FR-48 to FR-54)
 11. Resume upload and parsing (FR-30 to FR-32)

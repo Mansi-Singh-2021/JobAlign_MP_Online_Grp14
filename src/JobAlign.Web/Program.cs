@@ -83,6 +83,11 @@ using (var scope = app.Services.CreateScope())
     // Idempotent - runs on every startup, checks before inserting.
     var skillSeeder = scope.ServiceProvider.GetRequiredService<MasterSkillSeeder>();
     await skillSeeder.SeedAsync();
+
+    // Development only, and only when Seed:AdminPassword is configured. Public registration
+    // always creates a Candidate (FR-01), so without this nobody can reach the administrator
+    // screens. Remove once FR-55/FR-56 provide a real way to assign roles.
+    await AdminSeeder.SeedAsync(scope.ServiceProvider, app.Configuration, app.Environment.IsDevelopment());
 }
 
 app.Run();

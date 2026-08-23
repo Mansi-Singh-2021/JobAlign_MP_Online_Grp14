@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using JobAlign.Core.Abstractions;
 using JobAlign.Core.Enums;
 using JobAlign.Core.Extraction;
@@ -28,17 +29,28 @@ public class StubExtractor : IJobExtractor
     public string ConfigVersion => "stub-v1";
 
     /// <summary>
-    /// Skill names this stub can recognise, paired with how a posting usually frames them.
-    /// Every name here must exist in the seeded master skill list, or resolution drops it
-    /// and the downstream scoring has nothing to compare — agreed with Member B.
+    /// Surface forms this stub can spot in a posting, with how a posting usually frames them.
     /// </summary>
-    private static readonly (string Name, SkillType Type)[] KnownSkills =
+    /// <remarks>
+    /// Several forms map to the same master skill on purpose — a posting saying "K8s" or
+    /// "MSSQL" should still produce Kubernetes and SQL Server. The stub does not know the
+    /// alias table; it emits whatever wording it found and lets ISkillResolver decide what
+    /// that is (BR-04). ExtractionService drops the duplicates.
+    /// </remarks>
+    private static readonly (string Surface, SkillType Type)[] KnownSkills =
     [
         ("C#", SkillType.Required),
+        ("C Sharp", SkillType.Required),
+        ("C-Sharp", SkillType.Required),
         ("ASP.NET Core", SkillType.Required),
+        ("ASP .NET Core", SkillType.Required),
+        ("ASP.NET", SkillType.Required),
         ("SQL Server", SkillType.Required),
+        ("MSSQL", SkillType.Required),
         ("REST API", SkillType.Required),
+        ("RESTful", SkillType.Required),
         ("Entity Framework Core", SkillType.Required),
+        ("EF Core", SkillType.Required),
         ("JavaScript", SkillType.Required),
         ("TypeScript", SkillType.Required),
         ("React", SkillType.Required),
@@ -48,6 +60,7 @@ public class StubExtractor : IJobExtractor
         ("Azure", SkillType.Preferred),
         ("AWS", SkillType.Preferred),
         ("Kubernetes", SkillType.Preferred),
+        ("K8s", SkillType.Preferred),
         ("Terraform", SkillType.Preferred),
         ("CI/CD", SkillType.Preferred),
         ("Git", SkillType.Preferred),
@@ -58,7 +71,7 @@ public class StubExtractor : IJobExtractor
     /// Used when the pasted text mentions nothing recognisable. Matches the worked example
     /// in section 12 of the SRS, so the demo reproduces the document.
     /// </summary>
-    private static readonly (string Name, SkillType Type)[] FallbackSkills =
+    private static readonly (string Surface, SkillType Type)[] FallbackSkills =
     [
         ("C#", SkillType.Required),
         ("ASP.NET Core", SkillType.Required),
@@ -102,7 +115,7 @@ public class StubExtractor : IJobExtractor
             Summary = "Backend-focused .NET role with cloud exposure, hybrid in Pune, 3–6 years' experience.",
 
             Skills = skills
-                .Select(s => new ExtractedSkill(s.Name, s.Type, ConfidenceLevel.High))
+                .Select(s => new ExtractedSkill(s.Surface, s.Type, ConfidenceLevel.High))
                 .ToList(),
 
             Confidences =
@@ -122,17 +135,26 @@ public class StubExtractor : IJobExtractor
     }
 
     /// <summary>
-    /// Known skill names that actually appear in the text. Falls back to the SRS worked
+    /// Known surface forms that actually appear in the text. Falls back to the SRS worked
     /// example when the text mentions none, so a demo never shows an empty skill list.
     /// </summary>
-    private static (string Name, SkillType Type)[] FindSkills(string rawText)
+    private static (string Surface, SkillType Type)[] FindSkills(string rawText)
     {
-        var found = KnownSkills
-            .Where(s => rawText.Contains(s.Name, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        var found = KnownSkills.Where(s => MentionsWholeWord(rawText, s.Surface)).ToArray();
 
         return found.Length > 0 ? found : FallbackSkills;
     }
+
+    /// <summary>
+    /// Whole-word match, so "Java" does not fire on "JavaScript" and "Go" does not fire on
+    /// "Google". Plain Contains gets both wrong, and the resulting phantom skills would show
+    /// up as real gaps in someone's match score.
+    /// </summary>
+    private static bool MentionsWholeWord(string text, string surface) =>
+        Regex.IsMatch(
+            text,
+            $@"(?<![A-Za-z0-9]){Regex.Escape(surface)}(?![A-Za-z0-9])",
+            RegexOptions.IgnoreCase);
 
     /// <summary>
     /// First non-blank line, where it is short enough to plausibly be a title. A long first

@@ -117,6 +117,39 @@ it; they record which requirement each field serves.
 If you genuinely need a schema change, **ask the lead first**. An unannounced migration
 will collide with someone else's.
 
+### The 23 domain tables — this list is authoritative
+
+| Area | Tables |
+|---|---|
+| Skills | `MasterSkills`, `SkillAliases`, `Locations`, `LocationAliases` |
+| Postings | `JobPostings`, `PostingExtractions`, `ExtractionFieldConfidences`, `PostingFieldCorrections`, `PostingSkills`, `PostingRelations`, `PostingQualityAssessments` |
+| Profiles | `CandidateProfiles`, `EducationEntries`, `WorkExperienceEntries`, `ProjectEntries`, `CertificationEntries`, `ProfileSkills`, `Resumes`, `ResumeSkillSuggestions` |
+| Matching | `MatchResults`, `SkillGaps`, `RoadmapItems` |
+| Admin | `AuditEntries` |
+| Identity | `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, `AspNetUserClaims`, `AspNetUserLogins`, `AspNetUserTokens`, `AspNetRoleClaims` |
+
+### Names that look real but are not
+
+`Database_Design.pdf` describes an **earlier** schema. These names appear in it and in older
+notes, and **none of them exists** — code written against them will not compile:
+
+`SkillCategories` · `SkillCategory` · `Candidates` · `CandidateSkills` · `JobAnalyses` ·
+`AnalysisSkills` · `AnalysisFeedback` · `JobSkills` · `JobExtractions` · `SavedJobs` ·
+`Organizations` · `Recruiters` · `JobComparisons` · `JobComparisonItems` · `AuditLogs` ·
+`IJobPostingRepository`
+
+This has already cost the team a full rebuild once. `Schema_Deviations.md` in the repository
+root maps every one of them to the table that does exist — read it before writing data-access
+code, and **check a name against the list above before you use it**. When in doubt:
+
+```bash
+sqlcmd -S localhost -E -C -I -d JobAlign -Q "SELECT name FROM sys.tables ORDER BY name;"
+```
+
+Property names differ too. `MasterSkill` has `Name`, not `SkillName`, and `Category` as a
+plain string, not `CategoryId`. `SkillAlias` has `Alias` and `MasterSkillId`, not `AliasName`
+and `SkillId`. Timestamps are `DateTimeOffset`, not `DateTime`. Open the entity and read it.
+
 Enum reference (all stored as strings):
 
 | Enum | Members |

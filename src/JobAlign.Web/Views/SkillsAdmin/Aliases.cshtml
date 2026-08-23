@@ -1,0 +1,71 @@
+@model SkillAliasesViewModel
+@{ ViewData["Title"] = $"Aliases for {Model.SkillName}"; }
+
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">Aliases for @Model.SkillName</h1>
+        <p class="text-muted mb-0">
+            Alternative wordings that should resolve to this skill (FR-14, FR-58).
+            The canonical name itself resolves as <code>@Model.NormalizedName</code>.
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back to skills</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header">Current aliases (@Model.Aliases.Count)</div>
+            @if (Model.Aliases.Count == 0)
+            {
+                <div class="card-body">
+                    <p class="text-muted small mb-0">
+                        None yet. A posting must word this skill exactly as its canonical name
+                        to resolve.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush">
+                @foreach (var alias in Model.Aliases)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            @alias.Alias
+                            <code class="small text-muted ms-2">@alias.NormalizedAlias</code>
+                        </span>
+                        <form asp-action="RemoveAlias" asp-route-id="@Model.SkillId" method="post" class="d-inline">
+                            <input type="hidden" name="aliasId" value="@alias.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                        </form>
+                    </li>
+                }
+                </ul>
+            }
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="card">
+            <div class="card-header">Add an alias</div>
+            <div class="card-body">
+                <form asp-action="AddAlias" asp-route-id="@Model.SkillId" method="post">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" role="alert"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="NewAlias" class="form-label"></label>
+                        <input asp-for="NewAlias" name="newAlias" class="form-control" autocomplete="off"
+                               placeholder="e.g. K8s" />
+                        <div class="form-text">
+                            Punctuation and spacing are ignored, so an alias differing only in
+                            those is already covered.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Add alias</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

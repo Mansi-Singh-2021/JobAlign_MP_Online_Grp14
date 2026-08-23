@@ -1,0 +1,109 @@
+@model SkillListViewModel
+@{ ViewData["Title"] = "Master skills"; }
+
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">Master skills</h1>
+        <p class="text-muted mb-0">
+            @Model.ActiveCount active of @Model.TotalCount. Every skill on a posting, profile
+            or resume resolves to exactly one of these.
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Merge">Merge skills</a>
+        <a class="btn btn-primary btn-sm" asp-action="Create">Add a skill</a>
+    </div>
+</div>
+
+<form asp-action="Index" method="get" class="row g-2 align-items-center mb-3">
+    <div class="col-12 col-sm-6 col-lg-4">
+        <input name="search" value="@Model.Search" class="form-control form-control-sm"
+               placeholder="Search by name — &quot;c sharp&quot; finds C#" />
+    </div>
+    <div class="col-auto form-check ms-2">
+        <input type="checkbox" name="includeInactive" value="true" class="form-check-input"
+               id="includeInactive" checked="@Model.IncludeInactive" />
+        <label class="form-check-label small" for="includeInactive">Show inactive</label>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Search</button>
+        @if (!string.IsNullOrWhiteSpace(Model.Search))
+        {
+            <a class="btn btn-link btn-sm" asp-action="Index">Clear</a>
+        }
+    </div>
+</form>
+
+@if (Model.Skills.Count == 0)
+{
+    <div class="border rounded p-5 text-center bg-light">
+        <p class="text-muted mb-0">No skills match.</p>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Skill</th>
+                    <th scope="col">Resolves as</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Aliases</th>
+                    <th scope="col">State</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var skill in Model.Skills)
+            {
+                <tr class="@(skill.IsActive ? null : "opacity-50")">
+                    <td><a asp-action="Edit" asp-route-id="@skill.Id">@skill.Name</a></td>
+                    <td><code class="small">@skill.NormalizedName</code></td>
+                    <td>@(skill.Category ?? "—")</td>
+                    <td>
+                        <a asp-action="Aliases" asp-route-id="@skill.Id">
+                            @skill.AliasCount
+                        </a>
+                    </td>
+                    <td>
+                        @if (skill.IsMerged)
+                        {
+                            <span class="badge text-bg-info" title="Still resolves, forwarded to the surviving skill">
+                                merged into @skill.MergedInto
+                            </span>
+                        }
+                        else if (skill.IsActive)
+                        {
+                            <span class="badge text-bg-success">active</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">inactive</span>
+                        }
+                    </td>
+                    <td class="text-end text-nowrap">
+                        @if (!skill.IsMerged)
+                        {
+                            <form asp-action="SetActive" asp-route-id="@skill.Id" method="post" class="d-inline">
+                                <input type="hidden" name="isActive" value="@((!skill.IsActive).ToString())" />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                    @(skill.IsActive ? "Deactivate" : "Reactivate")
+                                </button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    @* Deletion is not offered anywhere: postings and profiles hold foreign keys to these
+       rows and the relationships are Restrict, so a delete would either fail or destroy the
+       ability to explain an existing match. *@
+    <p class="text-muted small mb-0">
+        Skills are deactivated or merged, never deleted — existing postings and profiles keep
+        referencing them.
+    </p>
+}

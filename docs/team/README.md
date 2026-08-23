@@ -33,8 +33,8 @@ member's handout. Nothing is deleted from scope; it is ordered.
 
 | | Member | Story | Handout | Owns | Pts |
 |---|---|---|---|---|---|
-| **A** | | US-05a | [role-a-extraction.md](role-a-extraction.md) | Extraction pipeline, stub extractor, review & correct UI | 5 |
-| **B** | | US-03 | [role-b-skills.md](role-b-skills.md) | Master skills, aliases, resolver, skill admin | 5 |
+| **A** | ✅ done | US-05a | [role-a-extraction.md](role-a-extraction.md) | Extraction pipeline, stub extractor, review & correct UI | 5 |
+| **B** | ✅ done | US-03 | [role-b-skills.md](role-b-skills.md) | Master skills, aliases, resolver, skill admin | 5 |
 | **C** | | US-02 | [role-c-profile.md](role-c-profile.md) | Candidate profile, profile skills, experience total | 5 |
 | **D** | | US-06 | [role-d-matching.md](role-d-matching.md) | Match scoring engine — the four scores | 8 |
 | **E** | | US-07 | [role-e-dashboard.md](role-e-dashboard.md) | Skill gaps, roadmap, dashboard, filter & sort | 6 |
@@ -73,7 +73,19 @@ This is the single thing that decides whether two days works. Do not skip it.
 
 ## Schedule
 
-### Wave 0 — before anyone else starts (~90 minutes)
+### Wave 0 — ✅ COMPLETE
+
+Contracts, `StubExtractor`, `SkillResolver` and `MasterSkillSeeder` are all on `main` and
+green. C, D, E and F can start immediately — pull first.
+
+**What actually happened, and the lesson:** B's first push overwrote
+`Infrastructure/DependencyInjection.cs` with generated boilerplate, deleting six
+registrations belonging to other people, and generated a seeder against `SkillCategories` —
+a table that does not exist, which the then-stale `Schema_Deviations.md` described. `main`
+was broken for everyone until it was repaired. **Read section 7 of the shared brief before
+writing any data-access code, and append to shared files rather than regenerating them.**
+
+<details><summary>Original Wave 0 instructions</summary>
 
 **Owners: A and B, pairing. Everyone else reads their handout and sets up.**
 
@@ -86,6 +98,8 @@ Land on `main`, in one PR:
 5. All of it registered in `AddJobAlignInfrastructure`.
 
 **Gate: `dotnet build` clean and `dotnet test` green before anyone pulls.**
+
+</details>
 
 ### Day 1
 

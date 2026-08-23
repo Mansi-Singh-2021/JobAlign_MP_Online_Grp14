@@ -23,7 +23,7 @@ public interface ISkillResolver
     /// </summary>
     string Normalize(string rawSkillText);
 }
-a
+
 /// <summary>
 /// Outcome of resolving one skill name. Unresolved is a normal result, not an error:
 /// a posting may name a skill the master list does not carry yet. The caller decides

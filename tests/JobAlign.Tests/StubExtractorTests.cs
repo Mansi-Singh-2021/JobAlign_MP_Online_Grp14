@@ -95,6 +95,34 @@ public class StubExtractorTests
     }
 
     [Fact]
+    public async Task Does_not_match_a_skill_name_inside_a_longer_word()
+    {
+        var outcome = await _extractor.ExtractAsync("Backend Engineer\nStrong JavaScript and Google Cloud.");
+
+        var names = outcome.Posting!.Skills.Select(s => s.RawText).ToList();
+
+        // "Java" is a substring of "JavaScript". A phantom skill here would surface as a
+        // real gap in someone's match score.
+        Assert.Contains("JavaScript", names);
+        Assert.DoesNotContain("Java", names);
+    }
+
+    [Fact]
+    public async Task Emits_the_wording_the_posting_used_so_aliases_can_resolve()
+    {
+        var outcome = await _extractor.ExtractAsync(
+            "Backend Engineer\nNeed c sharp, MSSQL and K8s experience.");
+
+        var names = outcome.Posting!.Skills.Select(s => s.RawText).ToList();
+
+        // The stub does not know the alias table — it reports what the posting said and
+        // lets ISkillResolver map it to a master skill (BR-04, FR-14).
+        Assert.Contains("C Sharp", names, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("MSSQL", names);
+        Assert.Contains("K8s", names);
+    }
+
+    [Fact]
     public void Reports_a_config_version_so_a_run_can_be_explained()
     {
         // NFR-08: every stored run records the configuration that produced it.

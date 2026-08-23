@@ -1,178 +1,178 @@
+using JobAlign.Core.Abstractions;
 using JobAlign.Core.Entities.Skills;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace JobAlign.Infrastructure.Data;
 
+/// <summary>
+/// Seeds the master skill list and its aliases (FR-14, FR-57, FR-58).
+/// </summary>
+/// <remarks>
+/// Idempotent, and safe to run on every startup: existing skills are left alone and only
+/// missing aliases are added, so extending the list below is enough to roll it out.
+///
+/// Normalization comes from <see cref="ISkillResolver.Normalize"/> rather than a private copy.
+/// If seeding and lookup ever normalized differently, every resolution would silently fail
+/// and nothing would report an error — the whole master-skill mechanism would just stop
+/// working. Sharing the one method is what prevents that.
+///
+/// Category is a plain string column on <see cref="MasterSkill"/>. There is no separate
+/// category table in this schema.
+/// </remarks>
 public class MasterSkillSeeder
 {
     private readonly JobAlignDbContext _context;
+    private readonly ISkillResolver _resolver;
     private readonly ILogger<MasterSkillSeeder> _logger;
 
-    public MasterSkillSeeder(JobAlignDbContext context, ILogger<MasterSkillSeeder> logger)
+    public MasterSkillSeeder(
+        JobAlignDbContext context,
+        ISkillResolver resolver,
+        ILogger<MasterSkillSeeder> logger)
     {
         _context = context;
+        _resolver = resolver;
         _logger = logger;
     }
 
-    public async Task SeedAsync()
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Seeding master skills and aliases...");
+        var existingSkills = await _context.MasterSkills
+            .ToDictionaryAsync(s => s.NormalizedName, cancellationToken);
 
-        // Step 1: Seed categories
-        var categories = new Dictionary<string, SkillCategory>();
-        var categoryNames = new[] { "Languages", "Frameworks", "Cloud", "Data", "Practice", "Tools" };
+        var takenAliases = await _context.SkillAliases
+            .Select(a => a.NormalizedAlias)
+            .ToListAsync(cancellationToken);
 
-        foreach (var name in categoryNames)
+        var reservedAliases = takenAliases.ToHashSet(StringComparer.Ordinal);
+
+        var addedSkills = 0;
+        var addedAliases = 0;
+
+        foreach (var (name, category, aliases) in SkillData)
         {
-            var existing = await _context.SkillCategories
-                .FirstOrDefaultAsync(c => c.CategoryName == name);
+            var normalizedName = _resolver.Normalize(name);
 
-            if (existing == null)
+            if (!existingSkills.TryGetValue(normalizedName, out var skill))
             {
-                var category = new SkillCategory { CategoryName = name };
-                _context.SkillCategories.Add(category);
-                categories[name] = category;
-                _logger.LogDebug("Created category: {CategoryName}", name);
-            }
-            else
-            {
-                categories[name] = existing;
-                _logger.LogDebug("Category already exists: {CategoryName}", name);
-            }
-        }
-
-        await _context.SaveChangesAsync();
-
-        // Step 2: Seed skills with their aliases
-        var skillsData = GetSkillsData(categories);
-
-        foreach (var (skillName, categoryId, aliases) in skillsData)
-        {
-            var normalizedName = NormalizeForSeeder(skillName);
-
-            var existingSkill = await _context.MasterSkills
-                .FirstOrDefaultAsync(s => s.NormalizedName == normalizedName);
-
-            if (existingSkill == null)
-            {
-                var skill = new MasterSkill
+                skill = new MasterSkill
                 {
-                    SkillName = skillName,
+                    Name = name,
                     NormalizedName = normalizedName,
-                    CategoryId = categoryId,
+                    Category = category,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTimeOffset.UtcNow
                 };
+
                 _context.MasterSkills.Add(skill);
-                await _context.SaveChangesAsync();
-
-                // Add aliases
-                foreach (var alias in aliases)
-                {
-                    var normalizedAlias = NormalizeForSeeder(alias);
-                    var existingAlias = await _context.SkillAliases
-                        .FirstOrDefaultAsync(a => a.NormalizedAlias == normalizedAlias);
-
-                    if (existingAlias == null)
-                    {
-                        _context.SkillAliases.Add(new SkillAlias
-                        {
-                            SkillId = skill.Id,
-                            AliasName = alias,
-                            NormalizedAlias = normalizedAlias
-                        });
-                        _logger.LogDebug("Added alias '{Alias}' → {SkillName}", alias, skillName);
-                    }
-                }
-                await _context.SaveChangesAsync();
-                _logger.LogDebug("Seeded skill: {SkillName}", skillName);
+                existingSkills[normalizedName] = skill;
+                addedSkills++;
             }
-            else
+
+            foreach (var alias in aliases)
             {
-                _logger.LogDebug("Skill already exists: {SkillName}", skillName);
+                var normalizedAlias = _resolver.Normalize(alias);
+
+                // Skip an alias that normalizes to nothing, that duplicates one already
+                // reserved, or that collapses onto the skill's own canonical form. The
+                // unique index on NormalizedAlias would otherwise reject the whole batch —
+                // several aliases here legitimately collapse together, for example
+                // "ASP .NET Core", "AspNet Core" and "Aspnetcore" all give "aspnetcore".
+                if (normalizedAlias.Length == 0
+                    || normalizedAlias == normalizedName
+                    || !reservedAliases.Add(normalizedAlias))
+                {
+                    continue;
+                }
+
+                _context.SkillAliases.Add(new SkillAlias
+                {
+                    Alias = alias,
+                    NormalizedAlias = normalizedAlias,
+                    MasterSkill = skill,          // set by reference: a new skill has no Id yet
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+
+                addedAliases++;
             }
         }
 
-        _logger.LogInformation("Master skills seeding complete.");
-    }
-
-    private string NormalizeForSeeder(string raw)
-    {
-        // Same normalization as SkillResolver
-        var normalized = raw.Trim();
-        normalized = normalized.Replace("#", "sharp");
-        normalized = normalized.Replace("+", "plus");
-        normalized = new string(normalized
-            .Where(char.IsLetterOrDigit)
-            .ToArray())
-            .ToLowerInvariant();
-        return normalized;
-    }
-
-    private List<(string Name, int? CategoryId, List<string> Aliases)> GetSkillsData(
-        Dictionary<string, SkillCategory> categories)
-    {
-        return new List<(string, int?, List<string>)>
+        if (addedSkills == 0 && addedAliases == 0)
         {
-            // Languages
-            ("C#", categories["Languages"]?.Id, new List<string> { "C Sharp", "C-Sharp", ".NET C#" }),
-            ("Java", categories["Languages"]?.Id, new List<string> { "J2EE" }),
-            ("Python", categories["Languages"]?.Id, new List<string> { "Py" }),
-            ("JavaScript", categories["Languages"]?.Id, new List<string> { "JS" }),
-            ("TypeScript", categories["Languages"]?.Id, new List<string> { "TS" }),
-            ("SQL", categories["Languages"]?.Id, new List<string> { "Structured Query Language" }),
-            ("Go", categories["Languages"]?.Id, new List<string> { "Golang" }),
-            ("C++", categories["Languages"]?.Id, new List<string> { "Cplusplus", "CPP" }),
-            ("Kotlin", categories["Languages"]?.Id, new List<string>()),
-            ("PHP", categories["Languages"]?.Id, new List<string>()),
-            ("Ruby", categories["Languages"]?.Id, new List<string>()),
+            _logger.LogInformation("Master skills already seeded; nothing to add.");
+            return;
+        }
 
-            // Frameworks
-            ("ASP.NET Core", categories["Frameworks"]?.Id, new List<string> { "ASP.NET", "ASP .NET Core", "AspNet Core", "Aspnetcore" }),
-            (".NET", categories["Frameworks"]?.Id, new List<string> { "DotNet" }),
-            ("Entity Framework Core", categories["Frameworks"]?.Id, new List<string> { "EF Core", "EntityFramework" }),
-            ("React", categories["Frameworks"]?.Id, new List<string> { "React.js" }),
-            ("Angular", categories["Frameworks"]?.Id, new List<string>()),
-            ("Vue", categories["Frameworks"]?.Id, new List<string> { "Vue.js" }),
-            ("Node.js", categories["Frameworks"]?.Id, new List<string> { "Node" }),
-            ("Spring Boot", categories["Frameworks"]?.Id, new List<string> { "Spring" }),
-            ("Django", categories["Frameworks"]?.Id, new List<string>()),
-            ("Flask", categories["Frameworks"]?.Id, new List<string>()),
+        await _context.SaveChangesAsync(cancellationToken);
 
-            // Cloud & DevOps
-            ("Azure", categories["Cloud"]?.Id, new List<string> { "MS Azure" }),
-            ("AWS", categories["Cloud"]?.Id, new List<string> { "Amazon Web Services" }),
-            ("GCP", categories["Cloud"]?.Id, new List<string> { "Google Cloud", "Google Cloud Platform" }),
-            ("Docker", categories["Cloud"]?.Id, new List<string>()),
-            ("Kubernetes", categories["Cloud"]?.Id, new List<string> { "K8s" }),
-            ("Terraform", categories["Cloud"]?.Id, new List<string>()),
-
-            // Data
-            ("SQL Server", categories["Data"]?.Id, new List<string> { "MSSQL", "MS SQL Server", "Microsoft SQL Server" }),
-            ("PostgreSQL", categories["Data"]?.Id, new List<string> { "Postgres" }),
-            ("MySQL", categories["Data"]?.Id, new List<string>()),
-            ("MongoDB", categories["Data"]?.Id, new List<string>()),
-            ("Redis", categories["Data"]?.Id, new List<string>()),
-            ("Power BI", categories["Data"]?.Id, new List<string> { "PowerBI" }),
-
-            // Practices
-            ("REST API", categories["Practice"]?.Id, new List<string> { "REST", "RESTful API", "RESTful" }),
-            ("Microservices", categories["Practice"]?.Id, new List<string>()),
-            ("CI/CD", categories["Practice"]?.Id, new List<string> { "CI CD", "Continuous Integration" }),
-            ("Git", categories["Practice"]?.Id, new List<string>()),
-            ("Agile", categories["Practice"]?.Id, new List<string>()),
-            ("Scrum", categories["Practice"]?.Id, new List<string>()),
-            ("Unit Testing", categories["Practice"]?.Id, new List<string> { "Unit Test" }),
-            ("TDD", categories["Practice"]?.Id, new List<string> { "Test Driven Development" }),
-
-            // Tools
-            ("Visual Studio", categories["Tools"]?.Id, new List<string> { "VS" }),
-            ("Azure DevOps", categories["Tools"]?.Id, new List<string> { "Azure Devops", "VSTS" }),
-            ("Jira", categories["Tools"]?.Id, new List<string>()),
-            ("Jenkins", categories["Tools"]?.Id, new List<string>()),
-            ("GitHub Actions", categories["Tools"]?.Id, new List<string> { "GH Actions", "GitHub CI" }),
-        };
+        _logger.LogInformation(
+            "Seeded {SkillCount} master skill(s) and {AliasCount} alias(es).",
+            addedSkills, addedAliases);
     }
+
+    /// <summary>
+    /// The canonical list. A name added here must be spelled exactly as it should display —
+    /// it is what candidates see, and what StubExtractor emits so extracted skills resolve.
+    /// </summary>
+    private static readonly (string Name, string Category, string[] Aliases)[] SkillData =
+    [
+        // ---- Languages ----
+        ("C#",                    "Languages",  ["C Sharp", "C-Sharp", ".NET C#"]),
+        ("Java",                  "Languages",  ["J2EE"]),
+        ("Python",                "Languages",  ["Py"]),
+        ("JavaScript",            "Languages",  ["JS"]),
+        ("TypeScript",            "Languages",  ["TS"]),
+        ("SQL",                   "Languages",  ["Structured Query Language"]),
+        ("Go",                    "Languages",  ["Golang"]),
+        ("C++",                   "Languages",  ["CPP"]),
+        ("Kotlin",                "Languages",  []),
+        ("PHP",                   "Languages",  []),
+        ("Ruby",                  "Languages",  []),
+
+        // ---- Frameworks ----
+        ("ASP.NET Core",          "Frameworks", ["ASP.NET", "ASP .NET Core", "AspNet Core"]),
+        (".NET",                  "Frameworks", ["DotNet"]),
+        ("Entity Framework Core", "Frameworks", ["EF Core", "EntityFramework"]),
+        ("React",                 "Frameworks", ["React.js"]),
+        ("Angular",               "Frameworks", []),
+        ("Vue",                   "Frameworks", ["Vue.js"]),
+        ("Node.js",               "Frameworks", ["Node"]),
+        ("Spring Boot",           "Frameworks", ["Spring"]),
+        ("Django",                "Frameworks", []),
+        ("Flask",                 "Frameworks", []),
+
+        // ---- Cloud and DevOps ----
+        ("Azure",                 "Cloud",      ["MS Azure"]),
+        ("AWS",                   "Cloud",      ["Amazon Web Services"]),
+        ("GCP",                   "Cloud",      ["Google Cloud", "Google Cloud Platform"]),
+        ("Docker",                "Cloud",      []),
+        ("Kubernetes",            "Cloud",      ["K8s"]),
+        ("Terraform",             "Cloud",      []),
+
+        // ---- Data ----
+        ("SQL Server",            "Data",       ["MSSQL", "MS SQL Server", "Microsoft SQL Server"]),
+        ("PostgreSQL",            "Data",       ["Postgres"]),
+        ("MySQL",                 "Data",       []),
+        ("MongoDB",               "Data",       []),
+        ("Redis",                 "Data",       []),
+        ("Power BI",              "Data",       ["PowerBI"]),
+
+        // ---- Practices ----
+        ("REST API",              "Practice",   ["REST", "RESTful API", "RESTful"]),
+        ("Microservices",         "Practice",   []),
+        ("CI/CD",                 "Practice",   ["CI CD", "Continuous Integration"]),
+        ("Git",                   "Practice",   []),
+        ("Agile",                 "Practice",   []),
+        ("Scrum",                 "Practice",   []),
+        ("Unit Testing",          "Practice",   ["Unit Test"]),
+        ("TDD",                   "Practice",   ["Test Driven Development"]),
+
+        // ---- Tools ----
+        ("Visual Studio",         "Tools",      ["VS"]),
+        ("Azure DevOps",          "Tools",      ["VSTS"]),
+        ("Jira",                  "Tools",      []),
+        ("Jenkins",               "Tools",      []),
+        ("GitHub Actions",        "Tools",      ["GH Actions", "GitHub CI"])
+    ];
 }

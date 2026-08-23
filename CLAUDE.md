@@ -136,10 +136,15 @@ Work in this sequence. Do not jump ahead.
 2. ~~Paste a posting → save → list it. **No AI at all.**~~ (FR-06, FR-08, FR-09) **Done.**
    `IJobPostingService` takes the owner id on every method, so BR-09 is enforced at the
    service boundary rather than in the controller.
-3. `IJobExtractor` interface + `StubExtractor` returning canned JSON. Wire the full
-   review/correct UI against the stub. (FR-12, FR-18) **← next**
+3. ~~`IJobExtractor` interface + `StubExtractor`. Wire the full review/correct UI
+   against the stub.~~ (FR-12, FR-18, FR-19, FR-20, FR-21) **Done.** Extraction runs are
+   history; corrections attach to the posting, so they survive a re-run (BR-03).
 4. `AiExtractor` real implementation behind the same interface. Keep the stub for tests.
-5. Master skills, aliases, skill resolution (FR-14, FR-57, FR-58)
+5. ~~Master skills, aliases, skill resolution~~ (FR-14, FR-57, FR-58) **Done.**
+   `MasterSkillSeeder` seeds 46 skills and 35 aliases at startup; `SkillResolver` does
+   exact + alias lookup and follows merges; `/SkillsAdmin` covers add, edit, deactivate,
+   aliases and merge. Merging repoints stored posting and profile skills, so scoring sees
+   one skill afterwards.
 6. Salary and location normalization (FR-15, FR-16)
 7. Candidate profile and skills (FR-27 to FR-29, FR-33)
 8. Match scoring (FR-35 to FR-41)

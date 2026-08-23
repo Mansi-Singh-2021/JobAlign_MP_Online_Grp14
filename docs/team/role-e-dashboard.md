@@ -88,8 +88,8 @@ single most useful thing on the screen. Colour alone is not enough; use a label 
 
 ### 3. Roadmap (FR-45, FR-46, FR-47)
 
-`RebuildRoadmapAsync` aggregates every `SkillGap` across the candidate's **Confirmed**
-postings (BR-08):
+`RebuildRoadmapAsync` aggregates every `SkillGap` across the candidate's postings, skipping
+only those with status **Pending** (BR-08 excludes Pending and nothing else):
 
 1. Group gaps by `MasterSkillId`.
 2. Count occurrences where `SkillType = Required` into `RequiredOccurrenceCount`, and
@@ -110,7 +110,7 @@ score (BR-06). Offer a "I've learned this — add to my profile" action that cal
 One page:
 
 - Posting counts by `ApplicationStatus`
-- Average and best match score across confirmed postings
+- Average and best match score across non-Pending postings
 - Top 5 roadmap skills
 - Recent postings with their scores
 
@@ -169,7 +169,7 @@ and `RoleNames.Administrator`, as the existing layout already does.
 RebuildRoadmap_orders_required_gaps_above_preferred
 RebuildRoadmap_counts_occurrences_across_postings
 RebuildRoadmap_preserves_an_InProgress_status
-RebuildRoadmap_ignores_pending_postings
+RebuildRoadmap_ignores_only_pending_postings
 SetRoadmapStatus_rejects_another_users_item
 GetGapsForPosting_filters_by_owner
 ```
@@ -179,7 +179,7 @@ GetGapsForPosting_filters_by_owner
 | You need | From | Until then |
 |---|---|---|
 | `MatchResult` and `SkillGap` rows | D | **Biggest dependency.** Build the views against hand-inserted rows first |
-| Confirmed postings with skills | A | same |
+| Extracted postings with skills | A | same |
 | `FeedbackText` on `MatchResult` | F | Show it if present, hide the panel if null |
 | `ICandidateProfileService.AddSkillAsync` | C | For the roadmap "add to profile" action |
 
