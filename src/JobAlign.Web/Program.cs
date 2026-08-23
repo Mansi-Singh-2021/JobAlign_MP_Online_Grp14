@@ -78,6 +78,11 @@ app.MapControllerRoute(
 using (var scope = app.Services.CreateScope())
 {
     await RoleSeeder.SeedAsync(scope.ServiceProvider);
+    
+    // FR-14, FR-57, FR-58: Seed master skills and aliases.
+    // Idempotent - runs on every startup, checks before inserting.
+    var skillSeeder = scope.ServiceProvider.GetRequiredService<MasterSkillSeeder>();
+    await skillSeeder.SeedAsync();
 }
 
 app.Run();
