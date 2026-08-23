@@ -34,7 +34,8 @@ public static class DependencyInjection
         services.AddScoped<IExtractionService, ExtractionService>();
 
         // TEMPORARY: Member B replaces this with SkillResolver in Wave 0.
-        services.AddScoped<ISkillResolver, PlaceholderSkillResolver>();
+        services.AddScoped<ISkillResolver, SkillResolver>();
+        services.AddScoped<MasterSkillSeeder>();
 
         return services;
     }
