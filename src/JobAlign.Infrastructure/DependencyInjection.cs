@@ -49,6 +49,9 @@ public static class DependencyInjection
         // Registered after Role C: a profile change rescores the library (FR-41).
         services.AddScoped<IMatchScoringService, MatchScoringService>();
 
+        // --- Role E: skill gaps, roadmap and dashboard (FR-42 to FR-54) ---
+        services.AddScoped<ISkillGapService, SkillGapService>();
+
         return services;
     }
 }

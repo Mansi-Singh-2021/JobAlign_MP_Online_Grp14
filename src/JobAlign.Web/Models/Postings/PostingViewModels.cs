@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using JobAlign.Core.Enums;
+using JobAlign.Web.Models.Dashboard;
 
 namespace JobAlign.Web.Models.Postings;
 
@@ -26,7 +27,7 @@ public class CapturePostingViewModel
     public DateTime? CapturedOn { get; set; }
 }
 
-/// <summary>One row in the saved-postings list (FR-11, NFR-02).</summary>
+/// <summary>One row in the saved-postings list (FR-11, FR-50, FR-51, NFR-02).</summary>
 public class PostingListItemViewModel
 {
     public int Id { get; init; }
@@ -38,21 +39,42 @@ public class PostingListItemViewModel
     public bool IsArchived { get; init; }
 
     /// <summary>
-    /// First line of the raw text, used as a stand-in title. There is no extracted
-    /// job title yet — extraction is a later step, and inventing one here would
-    /// breach BR-02.
+    /// First line of the raw text, used as a fallback if no extracted title.
     /// </summary>
     public string Preview { get; init; } = string.Empty;
+
+    public string? JobTitle { get; init; }
+    public string? CompanyName { get; init; }
+    public string? Location { get; init; }
+    public RemotePolicy? RemotePolicy { get; init; }
+    public decimal? ExperienceMinYears { get; init; }
+    public decimal? ExperienceMaxYears { get; init; }
+    public string? SalaryText { get; init; }
+    public decimal? SalaryYearly { get; init; }
+    public decimal? OverallScore { get; init; }
 }
 
-/// <summary>The saved-postings page (FR-11).</summary>
+/// <summary>The saved-postings page with filtering and sorting (FR-11, FR-50, FR-51).</summary>
 public class PostingListViewModel
 {
     public IReadOnlyList<PostingListItemViewModel> Postings { get; init; } = [];
     public bool IncludeArchived { get; init; }
+
+    // Filter properties (FR-50)
+    public RemotePolicy? WorkMode { get; init; }
+    public string? Location { get; init; }
+    public decimal? MinExperience { get; init; }
+    public decimal? MaxExperience { get; init; }
+
+    // Sort properties (FR-51)
+    public string? SortBy { get; init; } = "date";
+    public string? SortOrder { get; init; } = "desc";
+
+    /// <summary>Number of postings excluded from the ranked list due to null score/salary (BR-10).</summary>
+    public int UnrankedCount { get; init; }
 }
 
-/// <summary>A single posting (FR-11). Extracted detail arrives in a later step.</summary>
+/// <summary>A single posting (FR-11). Extracted detail and match scores attached.</summary>
 public class PostingDetailsViewModel
 {
     public int Id { get; init; }
@@ -75,9 +97,16 @@ public class PostingDetailsViewModel
     public string? JobTitle { get; init; }
     public string? CompanyName { get; init; }
     public string? Location { get; init; }
+    public RemotePolicy? RemotePolicy { get; init; }
+    public decimal? ExperienceMinYears { get; init; }
+    public decimal? ExperienceMaxYears { get; init; }
+    public string? SalaryText { get; init; }
 
     public int RequiredSkillCount { get; init; }
     public int PreferredSkillCount { get; init; }
 
     public bool IsExtractionFailed => RunStatus == ExtractionRunStatus.Failed;
+
+    /// <summary>Match score breakdown and skill gaps card (FR-40, FR-42, FR-43).</summary>
+    public MatchScoreCardViewModel? MatchScoreCard { get; init; }
 }

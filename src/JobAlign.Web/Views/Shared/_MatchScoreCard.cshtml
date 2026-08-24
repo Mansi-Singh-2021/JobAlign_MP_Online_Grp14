@@ -1,0 +1,210 @@
+@model JobAlign.Web.Models.Dashboard.MatchScoreCardViewModel
+
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <h5 class="card-title mb-0 fw-semibold">Match score breakdown</h5>
+        @if (!string.IsNullOrWhiteSpace(Model.ScoringConfigVersion))
+        {
+            <span class="badge text-bg-light border text-muted font-monospace small">@Model.ScoringConfigVersion</span>
+        }
+    </div>
+    <div class="card-body">
+        @if (!Model.HasMatchResult)
+        {
+            <div class="text-center py-3 text-muted">
+                <p class="mb-0">This posting has not been scored against your profile yet.</p>
+            </div>
+        }
+        else
+        {
+            @* Overall Score Header *@
+            <div class="row align-items-center mb-4 pb-3 border-bottom">
+                <div class="col-12 col-md-5 mb-3 mb-md-0">
+                    <span class="text-muted text-uppercase small fw-bold d-block mb-1">Overall Match</span>
+                    @if (Model.OverallScore.HasValue)
+                    {
+                        <div class="d-flex align-items-baseline gap-2">
+                            <span class="display-6 fw-bold text-primary">@Model.OverallScore.Value.ToString("0")%</span>
+                            <span class="text-muted small">weighted score</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div>
+                            <span class="h4 text-muted fw-normal">Not measurable</span>
+                            <p class="small text-muted mb-0">The posting did not state enough criteria to calculate an overall score.</p>
+                        </div>
+                    }
+                </div>
+                <div class="col-12 col-md-7">
+                    @* Component Scores (FR-40) *@
+                    <div class="d-flex flex-column gap-2">
+                        @* Required Skills Component *@
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="fw-semibold text-secondary">Required skills match (60%)</span>
+                                <span>
+                                    @(Model.RequiredSkillScore.HasValue ? $"{Model.RequiredSkillScore.Value:0}%" : "Not measurable")
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                @if (Model.RequiredSkillScore.HasValue)
+                                {
+                                    <div class="progress-bar bg-primary" role="progressbar"
+                                         style="width: @Model.RequiredSkillScore.Value%"
+                                         aria-valuenow="@Model.RequiredSkillScore.Value" aria-valuemin="0" aria-valuemax="100"></div>
+                                }
+                                else
+                                {
+                                    <div class="progress-bar bg-light" role="progressbar" style="width: 100%"></div>
+                                }
+                            </div>
+                        </div>
+
+                        @* Preferred Skills Component *@
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="fw-semibold text-secondary">Preferred skills match (15%)</span>
+                                <span>
+                                    @(Model.PreferredSkillScore.HasValue ? $"{Model.PreferredSkillScore.Value:0}%" : "Not measurable")
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                @if (Model.PreferredSkillScore.HasValue)
+                                {
+                                    <div class="progress-bar bg-info" role="progressbar"
+                                         style="width: @Model.PreferredSkillScore.Value%"
+                                         aria-valuenow="@Model.PreferredSkillScore.Value" aria-valuemin="0" aria-valuemax="100"></div>
+                                }
+                                else
+                                {
+                                    <div class="progress-bar bg-light" role="progressbar" style="width: 100%"></div>
+                                }
+                            </div>
+                        </div>
+
+                        @* Experience Component *@
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="fw-semibold text-secondary">Experience match (25%)</span>
+                                <span>
+                                    @(Model.ExperienceScore.HasValue ? $"{Model.ExperienceScore.Value:0}%" : "Not measurable")
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                @if (Model.ExperienceScore.HasValue)
+                                {
+                                    <div class="progress-bar bg-success" role="progressbar"
+                                         style="width: @Model.ExperienceScore.Value%"
+                                         aria-valuenow="@Model.ExperienceScore.Value" aria-valuemin="0" aria-valuemax="100"></div>
+                                }
+                                else
+                                {
+                                    <div class="progress-bar bg-light" role="progressbar" style="width: 100%"></div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* AI Feedback text if present (FR-44) *@
+            @if (!string.IsNullOrWhiteSpace(Model.FeedbackText))
+            {
+                <div class="alert alert-info border-0 mb-4 bg-info-subtle text-info-emphasis">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-robot" viewBox="0 0 16 16">
+                            <path d="M6 12.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5M3 8.062C3 6.76 4.235 5.7 5.865 5.7c.368 0 .72.054 1.045.153.25-.453.641-.825 1.13-1.077A4.2 4.2 0 0 0 7.5 4.5C7.5 2.015 9.515 0 12 0a4.5 4.5 0 0 1 4.5 4.5c0 .354-.041.697-.12 1.026.495.25.89.624 1.14 1.08.326-.1.678-.154 1.045-.154C20.235 6.76 21.47 7.82 21.47 9.122c0 1.258-1.155 2.29-2.673 2.373-.092.748-.485 1.4-1.075 1.83A4.5 4.5 0 0 1 12 15a4.5 4.5 0 0 1-5.722-1.675c-.59-.43-.983-1.082-1.075-1.83C3.685 11.412 2.53 10.38 2.53 9.122z"/>
+                        </svg>
+                        <strong>AI Strengths &amp; Gaps Summary</strong>
+                    </div>
+                    <p class="mb-0 small" style="white-space: pre-line;">@Model.FeedbackText</p>
+                </div>
+            }
+
+            @* Skills Breakdown (FR-42, FR-43) *@
+            <div class="row g-3">
+                @* Held Skills *@
+                <div class="col-12 col-md-4">
+                    <div class="border rounded p-3 h-100 bg-light-subtle">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="badge text-bg-success d-inline-flex align-items-center gap-1">
+                                <span>&#10003;</span> Held Skills
+                            </span>
+                            <span class="text-muted small">@Model.HeldSkills.Count</span>
+                        </div>
+                        @if (Model.HeldSkills.Count == 0)
+                        {
+                            <p class="text-muted small mb-0">No matching skills detected.</p>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var skill in Model.HeldSkills)
+                                {
+                                    <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle py-1 px-2">
+                                        @skill.SkillName
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Missing Required Skills *@
+                <div class="col-12 col-md-4">
+                    <div class="border rounded p-3 h-100 bg-danger-subtle border-danger-subtle">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="badge text-bg-danger d-inline-flex align-items-center gap-1">
+                                <span>&#10007;</span> Missing Required
+                            </span>
+                            <span class="text-danger small fw-semibold">@Model.MissingRequiredSkills.Count</span>
+                        </div>
+                        @if (Model.MissingRequiredSkills.Count == 0)
+                        {
+                            <p class="text-muted small mb-0">No missing required skills!</p>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var skill in Model.MissingRequiredSkills)
+                                {
+                                    <span class="badge bg-danger text-white py-1 px-2">
+                                        @skill.SkillName
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Missing Preferred Skills *@
+                <div class="col-12 col-md-4">
+                    <div class="border rounded p-3 h-100 bg-warning-subtle border-warning-subtle">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="badge text-bg-warning text-dark d-inline-flex align-items-center gap-1">
+                                <span>&#9679;</span> Missing Preferred
+                            </span>
+                            <span class="text-dark small fw-semibold">@Model.MissingPreferredSkills.Count</span>
+                        </div>
+                        @if (Model.MissingPreferredSkills.Count == 0)
+                        {
+                            <p class="text-muted small mb-0">No missing preferred skills.</p>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var skill in Model.MissingPreferredSkills)
+                                {
+                                    <span class="badge bg-warning text-dark border border-warning-subtle py-1 px-2">
+                                        @skill.SkillName
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>

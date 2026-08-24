@@ -1,0 +1,259 @@
+@model JobAlign.Web.Models.Dashboard.DashboardViewModel
+@{
+    ViewData["Title"] = "Candidate Dashboard";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h1 class="h3 mb-0">Dashboard</h1>
+        <p class="text-muted small mb-0">Overview of your job search progress, match scores, and learning goals.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary btn-sm" asp-controller="Roadmap" asp-action="Index">View Learning Roadmap</a>
+        <a class="btn btn-primary btn-sm" asp-controller="Postings" asp-action="Create">Add a posting</a>
+    </div>
+</div>
+
+@if (Model.PendingCount > 0)
+{
+    <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-4" role="alert">
+        <div class="small">
+            <strong>Note (BR-08 / FR-54):</strong> Dashboard figures exclude <strong>@Model.PendingCount</strong> pending posting@(Model.PendingCount == 1 ? "" : "s") undergoing extraction or review.
+        </div>
+        <a asp-controller="Postings" asp-action="Index" class="btn btn-sm btn-outline-warning text-dark">View postings</a>
+    </div>
+}
+
+@* Top Stats Row *@
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <span class="text-muted small fw-semibold text-uppercase d-block mb-1">Tracked Postings</span>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="h2 fw-bold mb-0">@Model.TotalPostings</span>
+                    @if (Model.PendingCount > 0)
+                    {
+                        <span class="badge text-bg-warning text-dark small">@Model.PendingCount pending</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <span class="text-muted small fw-semibold text-uppercase d-block mb-1">Active Pipeline</span>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="h2 fw-bold mb-0 text-primary">@(Model.AppliedCount + Model.InterviewCount)</span>
+                    <span class="text-muted small">applied &amp; interviews</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <span class="text-muted small fw-semibold text-uppercase d-block mb-1">Average Match</span>
+                <div class="d-flex align-items-baseline gap-2">
+                    @if (Model.AverageMatchScore.HasValue)
+                    {
+                        <span class="h2 fw-bold mb-0 text-success">@Model.AverageMatchScore.Value.ToString("0.0")%</span>
+                        <span class="text-muted small">across confirmed</span>
+                    }
+                    else
+                    {
+                        <span class="h4 text-muted fw-normal mb-0">Not measurable</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <span class="text-muted small fw-semibold text-uppercase d-block mb-1">Top Match Score</span>
+                <div class="d-flex align-items-baseline gap-2">
+                    @if (Model.BestMatchScore.HasValue)
+                    {
+                        <span class="h2 fw-bold mb-0 text-info">@Model.BestMatchScore.Value.ToString("0.0")%</span>
+                        <span class="text-muted small">best fit</span>
+                    }
+                    else
+                    {
+                        <span class="h4 text-muted fw-normal mb-0">Not measurable</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Application Pipeline Status Counts (FR-52, FR-53) *@
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="card-title mb-0 fw-semibold">Application Pipeline</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-2 text-center">
+            <div class="col">
+                <div class="p-2 border rounded bg-light">
+                    <span class="text-muted small d-block">Saved</span>
+                    <span class="h4 fw-bold">@Model.SavedCount</span>
+                </div>
+            </div>
+            <div class="col">
+                <div class="p-2 border rounded bg-primary-subtle text-primary-emphasis">
+                    <span class="text-muted small d-block">Applied</span>
+                    <span class="h4 fw-bold">@Model.AppliedCount</span>
+                </div>
+            </div>
+            <div class="col">
+                <div class="p-2 border rounded bg-info-subtle text-info-emphasis">
+                    <span class="text-muted small d-block">Interview</span>
+                    <span class="h4 fw-bold">@Model.InterviewCount</span>
+                </div>
+            </div>
+            <div class="col">
+                <div class="p-2 border rounded bg-danger-subtle text-danger-emphasis">
+                    <span class="text-muted small d-block">Rejected</span>
+                    <span class="h4 fw-bold">@Model.RejectedCount</span>
+                </div>
+            </div>
+            <div class="col">
+                <div class="p-2 border rounded bg-secondary-subtle text-secondary-emphasis">
+                    <span class="text-muted small d-block">Closed</span>
+                    <span class="h4 fw-bold">@Model.ClosedCount</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    @* Recent Postings with Match Scores (FR-52) *@
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="card-title mb-0 fw-semibold">Recent Postings</h5>
+                <a asp-controller="Postings" asp-action="Index" class="small text-decoration-none">View all</a>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.RecentPostings.Count == 0)
+                {
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-2">No postings captured yet.</p>
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="Postings" asp-action="Create">Add your first posting</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var posting in Model.RecentPostings)
+                        {
+                            <a asp-controller="Postings" asp-action="Details" asp-route-id="@posting.Id"
+                               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+                                <div class="me-3">
+                                    <div class="fw-semibold">
+                                        @(posting.JobTitle ?? posting.Preview)
+                                    </div>
+                                    <div class="text-muted small">
+                                        @if (!string.IsNullOrWhiteSpace(posting.CompanyName))
+                                        {
+                                            <span>@posting.CompanyName &bull; </span>
+                                        }
+                                        <span>@posting.Reference &bull; </span>
+                                        <span>@posting.CapturedAt.ToLocalTime().ToString("d MMM yyyy")</span>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    @if (posting.OverallScore.HasValue)
+                                    {
+                                        <span class="badge bg-primary-subtle text-primary-emphasis fs-6 px-2 py-1">
+                                            @posting.OverallScore.Value.ToString("0")%
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-light border text-muted small">Not scored</span>
+                                    }
+                                    <div class="small text-muted mt-1">@posting.ApplicationStatus</div>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* Top Skill Gaps from Roadmap (FR-45, FR-52) *@
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="card-title mb-0 fw-semibold">Top Missing Skills</h5>
+                <a asp-controller="Roadmap" asp-action="Index" class="small text-decoration-none">Full roadmap</a>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.TopRoadmapSkills.Count == 0)
+                {
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-2">No skill gaps found in your confirmed postings.</p>
+                        <form asp-controller="Roadmap" asp-action="Rebuild" method="post">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Rebuild roadmap</button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var skill in Model.TopRoadmapSkills)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge text-bg-light border font-monospace">#@skill.Priority</span>
+                                        <span class="fw-semibold">@skill.SkillName</span>
+                                    </div>
+                                    <div class="small text-muted mt-1">
+                                        @if (skill.RequiredOccurrenceCount > 0)
+                                        {
+                                            <span class="text-danger fw-semibold">@skill.RequiredOccurrenceCount required</span>
+                                        }
+                                        @if (skill.PreferredOccurrenceCount > 0)
+                                        {
+                                            @if (skill.RequiredOccurrenceCount > 0) { <span> &bull; </span> }
+                                            <span class="text-warning-emphasis">@skill.PreferredOccurrenceCount preferred</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div>
+                                    @if (skill.Status == RoadmapItemStatus.Completed)
+                                    {
+                                        <span class="badge text-bg-success">Completed</span>
+                                    }
+                                    else if (skill.Status == RoadmapItemStatus.InProgress)
+                                    {
+                                        <span class="badge text-bg-info">In Progress</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-light border text-muted">Not Started</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer bg-white text-center py-2 border-top">
+                        <a asp-controller="Roadmap" asp-action="Index" class="btn btn-sm btn-link text-decoration-none">
+                            View all skills &amp; track learning &rarr;
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

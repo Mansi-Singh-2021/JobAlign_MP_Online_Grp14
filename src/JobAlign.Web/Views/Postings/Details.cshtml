@@ -1,5 +1,7 @@
 @model PostingDetailsViewModel
-@{ ViewData["Title"] = Model.Reference; }
+@{
+    ViewData["Title"] = Model.Reference;
+}
 
 <div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
     <div>
@@ -19,11 +21,17 @@
     <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back to my postings</a>
 </div>
 
+@* Match Score Card Partial (FR-40, FR-42, FR-43) *@
+@if (Model.MatchScoreCard != null)
+{
+    <partial name="_MatchScoreCard" model="Model.MatchScoreCard" />
+}
+
 <div class="row g-3">
     <div class="col-12 col-lg-8">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Original posting text</span>
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <span class="fw-semibold">Original posting text</span>
                 <span class="badge text-bg-light border">Never modified</span>
             </div>
             <div class="card-body">
@@ -35,26 +43,49 @@
     </div>
 
     <div class="col-12 col-lg-4">
-        <div class="card mb-3">
-            <div class="card-header">Status</div>
+        @* Status & Application Lifecycle (FR-53) *@
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-3">
+                <span class="fw-semibold">Status &amp; Lifecycle</span>
+            </div>
             <ul class="list-group list-group-flush">
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Extraction</span>
-                    <span>@Model.Status</span>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">Extraction Status</span>
+                    <span class="badge text-bg-light border">@Model.Status</span>
                 </li>
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Application</span>
-                    <span>@Model.ApplicationStatus</span>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">Application Status</span>
+                    <div class="dropdown">
+                        <button class="btn btn-sm dropdown-toggle py-1 px-2 border @(Model.ApplicationStatus == ApplicationStatus.Interview ? "btn-info text-dark" : Model.ApplicationStatus == ApplicationStatus.Applied ? "btn-primary" : Model.ApplicationStatus == ApplicationStatus.Rejected ? "btn-danger" : Model.ApplicationStatus == ApplicationStatus.Closed ? "btn-secondary" : "btn-light")"
+                                type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            @Model.ApplicationStatus
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            @foreach (ApplicationStatus status in Enum.GetValues(typeof(ApplicationStatus)))
+                            {
+                                <li>
+                                    <form asp-action="SetApplicationStatus" method="post">
+                                        <input type="hidden" name="id" value="@Model.Id" />
+                                        <input type="hidden" name="applicationStatus" value="@status" />
+                                        <button type="submit" class="dropdown-item @(Model.ApplicationStatus == status ? "active" : "")">
+                                            @status
+                                        </button>
+                                    </form>
+                                </li>
+                            }
+                        </ul>
+                    </div>
                 </li>
             </ul>
         </div>
 
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Extracted details</span>
+        @* Extracted details card *@
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <span class="fw-semibold">Extracted details</span>
                 @if (Model.HasExtraction && !Model.IsExtractionFailed)
                 {
-                    <a class="small" asp-action="Review" asp-route-id="@Model.Id">Review &amp; correct</a>
+                    <a class="small text-decoration-none" asp-action="Review" asp-route-id="@Model.Id">Review &amp; correct</a>
                 }
             </div>
             <div class="card-body">
@@ -90,6 +121,30 @@
                         <dt class="col-5 text-muted fw-normal">Location</dt>
                         <dd class="col-7">@(Model.Location ?? "Not specified")</dd>
 
+                        @if (Model.RemotePolicy.HasValue)
+                        {
+                            <dt class="col-5 text-muted fw-normal">Work mode</dt>
+                            <dd class="col-7">@Model.RemotePolicy.Value</dd>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Model.SalaryText))
+                        {
+                            <dt class="col-5 text-muted fw-normal">Salary</dt>
+                            <dd class="col-7 text-success fw-semibold">@Model.SalaryText</dd>
+                        }
+
+                        @if (Model.ExperienceMinYears.HasValue || Model.ExperienceMaxYears.HasValue)
+                        {
+                            <dt class="col-5 text-muted fw-normal">Experience</dt>
+                            <dd class="col-7">
+                                @(Model.ExperienceMinYears.HasValue && Model.ExperienceMaxYears.HasValue
+                                    ? $"{Model.ExperienceMinYears}-{Model.ExperienceMaxYears} years"
+                                    : Model.ExperienceMinYears.HasValue
+                                        ? $"{Model.ExperienceMinYears}+ years"
+                                        : $"Up to {Model.ExperienceMaxYears} years")
+                            </dd>
+                        }
+
                         <dt class="col-5 text-muted fw-normal">Skills</dt>
                         <dd class="col-7">
                             @Model.RequiredSkillCount required, @Model.PreferredSkillCount preferred
@@ -99,16 +154,17 @@
             </div>
         </div>
 
+        @* Actions card *@
         <div class="d-grid gap-2">
             <form asp-action="Archive" asp-route-id="@Model.Id" method="post">
                 <input type="hidden" name="isArchived" value="@((!Model.IsArchived).ToString())" />
-                <button type="submit" class="btn btn-outline-secondary w-100">
+                <button type="submit" class="btn btn-outline-secondary w-100 btn-sm">
                     @(Model.IsArchived ? "Restore posting" : "Archive posting")
                 </button>
             </form>
             <form asp-action="Delete" asp-route-id="@Model.Id" method="post"
                   onsubmit="return confirm('Delete @Model.Reference permanently? This cannot be undone.');">
-                <button type="submit" class="btn btn-outline-danger w-100">Delete posting</button>
+                <button type="submit" class="btn btn-outline-danger w-100 btn-sm">Delete posting</button>
             </form>
         </div>
     </div>

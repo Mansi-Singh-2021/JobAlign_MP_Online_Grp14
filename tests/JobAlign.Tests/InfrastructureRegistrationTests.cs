@@ -31,6 +31,7 @@ public class InfrastructureRegistrationTests
     [InlineData(typeof(ISkillResolver))]
     [InlineData(typeof(ISkillAdminService))]
     [InlineData(typeof(IMatchScoringService))]
+    [InlineData(typeof(ISkillGapService))]
     public void Every_contract_a_controller_asks_for_resolves(Type contract)
     {
         using var provider = BuildProvider();

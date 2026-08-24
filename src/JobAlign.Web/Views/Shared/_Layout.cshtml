@@ -26,6 +26,9 @@
                         @if (User.IsInRole(RoleNames.Candidate))
                         {
                             <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link text-dark" asp-controller="Postings" asp-action="Index">My postings</a>
                             </li>
                             <li class="nav-item">
@@ -33,6 +36,9 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link text-dark" asp-controller="Profile" asp-action="Index">My profile</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Roadmap" asp-action="Index">Roadmap</a>
                             </li>
                         }
                         @if (User.IsInRole(RoleNames.Administrator))

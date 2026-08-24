@@ -1,0 +1,157 @@
+@model JobAlign.Web.Models.Dashboard.RoadmapViewModel
+@{
+    ViewData["Title"] = "Learning Roadmap";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h1 class="h3 mb-0">Learning Roadmap</h1>
+        <p class="text-muted small mb-0">Prioritized skills to learn based on frequency and necessity across all your confirmed postings (FR-45, FR-46).</p>
+    </div>
+    <form asp-action="Rebuild" method="post">
+        <button type="submit" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
+                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
+            </svg>
+            Rebuild Roadmap
+        </button>
+    </form>
+</div>
+
+@* Summary metrics row *@
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <span class="text-muted small">Total Skill Gaps</span>
+            <span class="h4 fw-bold mb-0">@Model.TotalGaps</span>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <span class="text-muted small">In Progress</span>
+            <span class="h4 fw-bold mb-0 text-info">@Model.InProgressCount</span>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <span class="text-muted small">Completed</span>
+            <span class="h4 fw-bold mb-0 text-success">@Model.CompletedCount</span>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <span class="text-muted small">Not Started</span>
+            <span class="h4 fw-bold mb-0 text-secondary">@Model.NotStartedCount</span>
+        </div>
+    </div>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="card border-0 shadow-sm p-5 text-center bg-white">
+        <h5 class="text-muted mb-2">No Skill Gaps Found</h5>
+        <p class="text-muted small mb-4">You have no recorded skill gaps across your confirmed postings, or you haven't confirmed any postings yet.</p>
+        <div>
+            <a class="btn btn-primary btn-sm" asp-controller="Postings" asp-action="Index">Go to My Postings</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col" style="width: 80px;">Priority</th>
+                        <th scope="col">Skill</th>
+                        <th scope="col">Demand in Postings</th>
+                        <th scope="col">Learning Status</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr class="@(item.Status == RoadmapItemStatus.Completed ? "table-light text-muted" : null)">
+                        <td>
+                            <span class="badge text-bg-light border font-monospace fs-6">#@item.Priority</span>
+                        </td>
+                        <td>
+                            <div class="fw-bold">@item.SkillName</div>
+                            @if (item.IsHeldInProfile)
+                            {
+                                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle small">In Profile</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                @if (item.RequiredOccurrenceCount > 0)
+                                {
+                                    <span class="badge text-bg-danger">
+                                        @item.RequiredOccurrenceCount required
+                                    </span>
+                                }
+                                @if (item.PreferredOccurrenceCount > 0)
+                                {
+                                    <span class="badge text-bg-warning text-dark">
+                                        @item.PreferredOccurrenceCount preferred
+                                    </span>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <div class="dropdown d-inline-block">
+                                <button class="btn btn-sm dropdown-toggle @(item.Status == RoadmapItemStatus.Completed ? "btn-success" : item.Status == RoadmapItemStatus.InProgress ? "btn-info text-dark" : "btn-outline-secondary")"
+                                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    @item.Status
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <form asp-action="UpdateStatus" method="post">
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <input type="hidden" name="status" value="@RoadmapItemStatus.NotStarted" />
+                                            <button type="submit" class="dropdown-item @(item.Status == RoadmapItemStatus.NotStarted ? "active" : "")">Not Started</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-action="UpdateStatus" method="post">
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <input type="hidden" name="status" value="@RoadmapItemStatus.InProgress" />
+                                            <button type="submit" class="dropdown-item @(item.Status == RoadmapItemStatus.InProgress ? "active" : "")">In Progress</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-action="UpdateStatus" method="post">
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <input type="hidden" name="status" value="@RoadmapItemStatus.Completed" />
+                                            <button type="submit" class="dropdown-item @(item.Status == RoadmapItemStatus.Completed ? "active" : "")">Completed</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (!item.IsHeldInProfile)
+                            {
+                                <form asp-action="AddToProfile" method="post" class="d-inline">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="level" value="@ProficiencyLevel.Intermediate" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Add this learned skill to your profile and recalculate match scores">
+                                        + Add to profile
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="text-success small fw-semibold">&#10003; Added to profile</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

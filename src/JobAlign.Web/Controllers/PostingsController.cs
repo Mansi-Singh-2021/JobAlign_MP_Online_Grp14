@@ -3,50 +3,170 @@ using JobAlign.Core.Abstractions;
 using JobAlign.Core.Entities.Identity;
 using JobAlign.Core.Entities.Postings;
 using JobAlign.Core.Enums;
+using JobAlign.Core.Extraction;
+using JobAlign.Infrastructure.Data;
+using JobAlign.Web.Models.Dashboard;
 using JobAlign.Web.Models.Postings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace JobAlign.Web.Controllers;
 
 /// <summary>
-/// Capture and management of the signed-in candidate's postings (FR-06, FR-08 to FR-11).
+/// Capture and management of the signed-in candidate's postings (FR-06, FR-08 to FR-11, FR-50, FR-51, FR-53).
 /// </summary>
-/// <remarks>
-/// Candidate-only by role: section 4.3 gives administrators no access to postings, and
-/// BR-09 says they may not read them. The role check here is the outer gate; the inner
-/// one is that every call into <see cref="IJobPostingService"/> carries the owner id.
-///
-/// No extraction happens in this controller. Capture and extraction are separate so a
-/// posting saves whether or not the AI service is reachable (NFR-06).
-/// </remarks>
 [Authorize(Roles = RoleNames.Candidate)]
 public class PostingsController : Controller
 {
     private readonly IJobPostingService _postings;
     private readonly IExtractionService _extraction;
+    private readonly ICandidateProfileService _profileService;
+    private readonly JobAlignDbContext _db;
     private readonly ILogger<PostingsController> _logger;
 
     public PostingsController(
         IJobPostingService postings,
         IExtractionService extraction,
+        ICandidateProfileService profileService,
+        JobAlignDbContext db,
         ILogger<PostingsController> logger)
     {
         _postings = postings;
         _extraction = extraction;
+        _profileService = profileService;
+        _db = db;
         _logger = logger;
     }
 
-    /// <summary>The saved-postings list (FR-11).</summary>
+    /// <summary>The saved-postings list with filtering and sorting (FR-11, FR-50, FR-51).</summary>
     [HttpGet]
-    public async Task<IActionResult> Index(bool includeArchived = false, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Index(
+        bool includeArchived = false,
+        RemotePolicy? workMode = null,
+        string? location = null,
+        decimal? minExp = null,
+        decimal? maxExp = null,
+        string sortBy = "date",
+        string sortOrder = "desc",
+        CancellationToken cancellationToken = default)
     {
-        var postings = await _postings.ListForOwnerAsync(CurrentUserId, includeArchived, cancellationToken);
+        var query = _db.JobPostings
+            .AsNoTracking()
+            .Where(p => p.OwnerUserId == CurrentUserId); // BR-09 server-side filter
+
+        if (!includeArchived)
+            query = query.Where(p => !p.IsArchived);
+
+        var rawPostings = await query
+            .Include(p => p.Extractions.Where(e => e.IsCurrent))
+            .Include(p => p.Corrections)
+            .Include(p => p.MatchResult)
+            .ToListAsync(cancellationToken);
+
+        var items = rawPostings.Select(p =>
+        {
+            var extraction = p.Extractions.FirstOrDefault();
+            var titleCorr = p.Corrections.FirstOrDefault(c => c.FieldName == CorrectableFields.JobTitle)?.CorrectedValue;
+            var compCorr = p.Corrections.FirstOrDefault(c => c.FieldName == CorrectableFields.CompanyName)?.CorrectedValue;
+            var locCorr = p.Corrections.FirstOrDefault(c => c.FieldName == CorrectableFields.RawLocationText)?.CorrectedValue;
+            var expMinCorr = p.Corrections.FirstOrDefault(c => c.FieldName == CorrectableFields.ExperienceMinYears)?.CorrectedValue;
+            var expMaxCorr = p.Corrections.FirstOrDefault(c => c.FieldName == CorrectableFields.ExperienceMaxYears)?.CorrectedValue;
+
+            decimal? minYears = decimal.TryParse(expMinCorr, out var d1) ? d1 : extraction?.ExperienceMinYears;
+            decimal? maxYears = decimal.TryParse(expMaxCorr, out var d2) ? d2 : extraction?.ExperienceMaxYears;
+
+            return new PostingListItemViewModel
+            {
+                Id = p.Id,
+                Reference = p.Reference,
+                CapturedAt = p.CapturedAt,
+                SourceName = p.SourceName,
+                Status = p.Status,
+                ApplicationStatus = p.ApplicationStatus,
+                IsArchived = p.IsArchived,
+                Preview = BuildPreview(p.RawText),
+                JobTitle = titleCorr ?? extraction?.JobTitle,
+                CompanyName = compCorr ?? extraction?.CompanyName,
+                Location = locCorr ?? extraction?.RawLocationText,
+                RemotePolicy = extraction?.RemotePolicy,
+                ExperienceMinYears = minYears,
+                ExperienceMaxYears = maxYears,
+                SalaryText = FormatSalary(extraction),
+                SalaryYearly = extraction?.SalaryMaxYearly ?? extraction?.SalaryMinYearly,
+                OverallScore = p.MatchResult?.OverallScore
+            };
+        }).ToList();
+
+        // 1. Filter by Work Mode (FR-50)
+        if (workMode.HasValue)
+        {
+            items = items.Where(i => i.RemotePolicy == workMode.Value).ToList();
+        }
+
+        // 2. Filter by Location (FR-50)
+        if (!string.IsNullOrWhiteSpace(location))
+        {
+            var loc = location.Trim();
+            items = items.Where(i => i.Location != null && i.Location.Contains(loc, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        // 3. Filter by Experience Range (FR-50)
+        if (minExp.HasValue)
+        {
+            items = items.Where(i => (i.ExperienceMaxYears ?? i.ExperienceMinYears ?? 0) >= minExp.Value).ToList();
+        }
+        if (maxExp.HasValue)
+        {
+            items = items.Where(i => (i.ExperienceMinYears ?? 0) <= maxExp.Value).ToList();
+        }
+
+        // 4. Sort (FR-51) & Respect Nulls (BR-10)
+        int unrankedCount = 0;
+        var isAsc = string.Equals(sortOrder, "asc", StringComparison.OrdinalIgnoreCase);
+
+        if (string.Equals(sortBy, "score", StringComparison.OrdinalIgnoreCase))
+        {
+            var withScore = items.Where(i => i.OverallScore.HasValue).ToList();
+            var withoutScore = items.Where(i => !i.OverallScore.HasValue).ToList();
+            unrankedCount = withoutScore.Count;
+
+            withScore = isAsc
+                ? withScore.OrderBy(i => i.OverallScore!.Value).ToList()
+                : withScore.OrderByDescending(i => i.OverallScore!.Value).ToList();
+
+            items = withScore.Concat(withoutScore).ToList();
+        }
+        else if (string.Equals(sortBy, "salary", StringComparison.OrdinalIgnoreCase))
+        {
+            var withSalary = items.Where(i => i.SalaryYearly.HasValue).ToList();
+            var withoutSalary = items.Where(i => !i.SalaryYearly.HasValue).ToList();
+            unrankedCount = withoutSalary.Count;
+
+            withSalary = isAsc
+                ? withSalary.OrderBy(i => i.SalaryYearly!.Value).ToList()
+                : withSalary.OrderByDescending(i => i.SalaryYearly!.Value).ToList();
+
+            items = withSalary.Concat(withoutSalary).ToList();
+        }
+        else
+        {
+            items = isAsc
+                ? items.OrderBy(i => i.CapturedAt).ToList()
+                : items.OrderByDescending(i => i.CapturedAt).ToList();
+        }
 
         return View(new PostingListViewModel
         {
             IncludeArchived = includeArchived,
-            Postings = postings.Select(ToListItem).ToList()
+            WorkMode = workMode,
+            Location = location,
+            MinExperience = minExp,
+            MaxExperience = maxExp,
+            SortBy = sortBy,
+            SortOrder = sortOrder,
+            UnrankedCount = unrankedCount,
+            Postings = items
         });
     }
 
@@ -60,8 +180,6 @@ public class PostingsController : Controller
         if (!ModelState.IsValid)
             return View(model);
 
-        // A date-only input carries no offset; treat what the candidate typed as a
-        // local date and convert, rather than silently reading it as UTC.
         DateTimeOffset? capturedAt = model.CapturedOn.HasValue
             ? new DateTimeOffset(DateTime.SpecifyKind(model.CapturedOn.Value, DateTimeKind.Local))
             : null;
@@ -75,14 +193,12 @@ public class PostingsController : Controller
         return RedirectToAction(nameof(Details), new { id = posting.Id });
     }
 
-    /// <summary>One posting, including its original text (FR-08, FR-11).</summary>
+    /// <summary>One posting, including its original text, extracted details, and match breakdown (FR-08, FR-11, FR-42, FR-43).</summary>
     [HttpGet]
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
         var posting = await _postings.GetForOwnerAsync(id, CurrentUserId, cancellationToken);
 
-        // NotFound rather than Forbid: telling the caller a posting exists but is
-        // someone else's is itself a disclosure (BR-09).
         if (posting is null)
             return NotFound();
 
@@ -90,9 +206,71 @@ public class PostingsController : Controller
         var corrections = await _extraction.GetCorrectionsAsync(id, CurrentUserId, cancellationToken);
         var skills = await _extraction.GetSkillsAsync(id, CurrentUserId, cancellationToken);
 
-        // Reuse the review builder so this page and the review screen agree on what a field
-        // says — both must show the correction where one stands, not the raw extraction (BR-03).
         var review = ReviewViewModelBuilder.Build(posting, extraction, corrections, skills);
+
+        // Load MatchResult & SkillGaps
+        var matchResult = await _db.MatchResults
+            .AsNoTracking()
+            .Include(m => m.SkillGaps)
+                .ThenInclude(g => g.MasterSkill)
+            .FirstOrDefaultAsync(m => m.JobPostingId == id && m.JobPosting.OwnerUserId == CurrentUserId, cancellationToken);
+
+        MatchScoreCardViewModel? scoreCard = null;
+        if (matchResult is not null)
+        {
+            var profile = await _profileService.GetAsync(CurrentUserId, cancellationToken);
+            var heldSkillIds = profile?.Skills.ToDictionary(s => s.MasterSkillId, s => s.ProficiencyLevel) ?? [];
+
+            var postingSkills = await _db.PostingSkills
+                .AsNoTracking()
+                .Where(s => s.JobPostingId == id)
+                .Include(s => s.MasterSkill)
+                .ToListAsync(cancellationToken);
+
+            var heldSkillsList = new List<MatchSkillItemViewModel>();
+            foreach (var ps in postingSkills.Where(s => heldSkillIds.ContainsKey(s.MasterSkillId)))
+            {
+                heldSkillsList.Add(new MatchSkillItemViewModel
+                {
+                    MasterSkillId = ps.MasterSkillId,
+                    SkillName = ps.MasterSkill.Name,
+                    SkillType = ps.SkillType,
+                    Proficiency = heldSkillIds.TryGetValue(ps.MasterSkillId, out var prof) ? prof : null
+                });
+            }
+
+            var missingRequired = matchResult.SkillGaps
+                .Where(g => g.SkillType == SkillType.Required)
+                .Select(g => new MatchSkillItemViewModel
+                {
+                    MasterSkillId = g.MasterSkillId,
+                    SkillName = g.MasterSkill?.Name ?? "Skill",
+                    SkillType = SkillType.Required
+                }).ToList();
+
+            var missingPreferred = matchResult.SkillGaps
+                .Where(g => g.SkillType == SkillType.Preferred)
+                .Select(g => new MatchSkillItemViewModel
+                {
+                    MasterSkillId = g.MasterSkillId,
+                    SkillName = g.MasterSkill?.Name ?? "Skill",
+                    SkillType = SkillType.Preferred
+                }).ToList();
+
+            scoreCard = new MatchScoreCardViewModel
+            {
+                HasMatchResult = true,
+                OverallScore = matchResult.OverallScore,
+                RequiredSkillScore = matchResult.RequiredSkillScore,
+                PreferredSkillScore = matchResult.PreferredSkillScore,
+                ExperienceScore = matchResult.ExperienceScore,
+                ScoringConfigVersion = matchResult.ScoringConfigVersion,
+                FeedbackText = matchResult.FeedbackText,
+                HeldSkills = heldSkillsList,
+                MissingRequiredSkills = missingRequired,
+                MissingPreferredSkills = missingPreferred
+            };
+        }
 
         return View(new PostingDetailsViewModel
         {
@@ -112,9 +290,39 @@ public class PostingsController : Controller
             JobTitle = FieldValue(review, CorrectableFields.JobTitle),
             CompanyName = FieldValue(review, CorrectableFields.CompanyName),
             Location = FieldValue(review, CorrectableFields.RawLocationText),
+            RemotePolicy = extraction?.RemotePolicy,
+            ExperienceMinYears = extraction?.ExperienceMinYears,
+            ExperienceMaxYears = extraction?.ExperienceMaxYears,
+            SalaryText = FormatSalary(extraction),
             RequiredSkillCount = review.RequiredSkills.Count,
-            PreferredSkillCount = review.PreferredSkills.Count
+            PreferredSkillCount = review.PreferredSkills.Count,
+            MatchScoreCard = scoreCard
         });
+    }
+
+    /// <summary>Update application lifecycle status (FR-53).</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetApplicationStatus(
+        int id,
+        ApplicationStatus applicationStatus,
+        string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        var posting = await _db.JobPostings
+            .FirstOrDefaultAsync(p => p.Id == id && p.OwnerUserId == CurrentUserId, cancellationToken);
+
+        if (posting is null)
+            return NotFound();
+
+        posting.ApplicationStatus = applicationStatus;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        TempData["StatusMessage"] = $"Application status updated to {applicationStatus}.";
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return Redirect(returnUrl);
+
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     // ---------------------------------------------------------------- extraction
@@ -206,10 +414,6 @@ public class PostingsController : Controller
 
     // ----------------------------------------------------------------
 
-    /// <summary>
-    /// The signed-in user's id. Read from the authentication cookie, never from the
-    /// request — a user-supplied owner id would defeat BR-09 entirely.
-    /// </summary>
     private int CurrentUserId =>
         int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)
                   ?? throw new InvalidOperationException("Authenticated user has no identifier claim."));
@@ -217,22 +421,18 @@ public class PostingsController : Controller
     private static string? FieldValue(ReviewExtractionViewModel review, string fieldName) =>
         review.Fields.FirstOrDefault(f => f.FieldName == fieldName)?.Value;
 
-    private static PostingListItemViewModel ToListItem(JobPosting posting) => new()
+    private static string? FormatSalary(PostingExtraction? extraction)
     {
-        Id = posting.Id,
-        Reference = posting.Reference,
-        CapturedAt = posting.CapturedAt,
-        SourceName = posting.SourceName,
-        Status = posting.Status,
-        ApplicationStatus = posting.ApplicationStatus,
-        IsArchived = posting.IsArchived,
-        Preview = BuildPreview(posting.RawText)
-    };
+        if (extraction == null) return null;
+        if (extraction.SalaryMinRaw.HasValue && extraction.SalaryMaxRaw.HasValue)
+            return $"{extraction.SalaryCurrencyRaw ?? ""}{extraction.SalaryMinRaw:N0} - {extraction.SalaryCurrencyRaw ?? ""}{extraction.SalaryMaxRaw:N0} {(extraction.SalaryPeriodRaw.HasValue ? "/" + extraction.SalaryPeriodRaw.Value : "")}".Trim();
+        if (extraction.SalaryMinRaw.HasValue)
+            return $"{extraction.SalaryCurrencyRaw ?? ""}{extraction.SalaryMinRaw:N0}+ {(extraction.SalaryPeriodRaw.HasValue ? "/" + extraction.SalaryPeriodRaw.Value : "")}".Trim();
+        if (extraction.SalaryMaxRaw.HasValue)
+            return $"Up to {extraction.SalaryCurrencyRaw ?? ""}{extraction.SalaryMaxRaw:N0} {(extraction.SalaryPeriodRaw.HasValue ? "/" + extraction.SalaryPeriodRaw.Value : "")}".Trim();
+        return null;
+    }
 
-    /// <summary>
-    /// First non-blank line of the posting, trimmed to a readable length. A stand-in
-    /// for a title until extraction runs — not a guess at one (BR-02).
-    /// </summary>
     private static string BuildPreview(string rawText)
     {
         var firstLine = rawText
