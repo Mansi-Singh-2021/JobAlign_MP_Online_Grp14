@@ -1,10 +1,13 @@
 using JobAlign.Core.Abstractions;
+using JobAlign.Infrastructure.Ai;
 using JobAlign.Infrastructure.Data;
 using JobAlign.Infrastructure.Extraction;
 using JobAlign.Infrastructure.Identity;
 using JobAlign.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace JobAlign.Infrastructure;
 
@@ -29,8 +32,17 @@ public static class DependencyInjection
         services.AddScoped<IAppEmailSender, LoggingEmailSender>();
 
         // --- Role A: extraction (build order step 3) ---
-        // StubExtractor until Member F lands AiExtractor behind the same interface (NFR-11).
-        services.AddScoped<IJobExtractor, StubExtractor>();
+        services.AddScoped<StubExtractor>();
+        services.AddScoped<AiExtractor>();
+
+        // Role F, build order step 4: swaps to AiExtractor once an API key is configured.
+        // Falls back to the stub when no key is present so the app still runs (NFR-06,
+        // role-f handout "Day-2 swap") — announced to the team before this line changed.
+        services.AddScoped<IJobExtractor>(sp =>
+            string.IsNullOrWhiteSpace(sp.GetRequiredService<IOptions<AiClientOptions>>().Value.ApiKey)
+                ? sp.GetRequiredService<StubExtractor>()
+                : sp.GetRequiredService<AiExtractor>());
+
         services.AddScoped<IExtractionService, ExtractionService>();
 
         // --- Role B: master skills, aliases, resolution (FR-14, FR-29, FR-57, FR-58) ---
@@ -51,6 +63,31 @@ public static class DependencyInjection
 
         // --- Role E: skill gaps, roadmap and dashboard (FR-42 to FR-54) ---
         services.AddScoped<ISkillGapService, SkillGapService>();
+
+        // --- Role F: AI client — extraction (above) and feedback (FR-44, FR-48, NFR-09, NFR-11) ---
+        // IConfiguration is resolved optionally, not required. The web host always registers
+        // it, but this method's only stated dependency is the connection string, and a bare
+        // ServiceCollection (which is what the registration tests build) has no IConfiguration.
+        // Requiring it made every contract below IExtractionService fail to resolve in tests
+        // while working fine in the app — the worst shape of a bug. Absent configuration, the
+        // property defaults on AiClientOptions stand and ApiKey stays null, so the stub
+        // implementations are selected exactly as they are for a teammate with no key.
+        services.AddOptions<AiClientOptions>()
+            .Configure<IServiceProvider>((options, serviceProvider) =>
+                serviceProvider.GetService<IConfiguration>()
+                    ?.GetSection(AiClientOptions.SectionName)
+                    .Bind(options));
+
+        services.AddHttpClient<AnthropicClient>();
+
+        services.AddScoped<StubFeedbackGenerator>();
+        services.AddScoped<AiFeedbackGenerator>();
+
+        // Same no-key fallback as IJobExtractor above — nobody is blocked on an API key.
+        services.AddScoped<IFeedbackGenerator>(sp =>
+            string.IsNullOrWhiteSpace(sp.GetRequiredService<IOptions<AiClientOptions>>().Value.ApiKey)
+                ? sp.GetRequiredService<StubFeedbackGenerator>()
+                : sp.GetRequiredService<AiFeedbackGenerator>());
 
         return services;
     }
