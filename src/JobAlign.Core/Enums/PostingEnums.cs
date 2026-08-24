@@ -7,7 +7,14 @@ namespace JobAlign.Core.Enums;
 /// </summary>
 public enum PostingStatus
 {
-    /// <summary>Captured, not yet extracted (FR-09).</summary>
+    /// <summary>
+    /// Captured and not confirmed (FR-09). Covers two situations, so it is not on its own
+    /// a statement about whether there is anything to score: a posting that has never been
+    /// extracted, and one whose extraction succeeded but which the candidate has not yet
+    /// reviewed — a successful run leaves the posting here, it does not advance it.
+    /// Re-extracting a Confirmed posting also returns it to New.
+    /// Check the current PostingExtraction's RunStatus to tell the two apart.
+    /// </summary>
     New = 0,
 
     /// <summary>Extraction failed or the AI service was unavailable (FR-19).

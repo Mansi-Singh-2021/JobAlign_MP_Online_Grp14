@@ -25,7 +25,7 @@ public sealed class MatchScoringService : IMatchScoringService
         int ownerUserId,
         CancellationToken cancellationToken = default)
     {
-        var posting = await ConfirmedPostings(ownerUserId)
+        var posting = await ScoreablePostings(ownerUserId)
             .Where(p => p.Id == postingId)
             .Include(p => p.MatchResult!)
                 .ThenInclude(result => result.SkillGaps)
@@ -78,7 +78,7 @@ public sealed class MatchScoringService : IMatchScoringService
         // One set-based load for the whole library. AsSplitQuery avoids a cartesian
         // product between skills, extractions and corrections; the query count stays
         // constant as the number of postings grows (FR-41, NFR-03).
-        var postings = await ConfirmedPostings(ownerUserId)
+        var postings = await ScoreablePostings(ownerUserId)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
@@ -117,9 +117,28 @@ public sealed class MatchScoringService : IMatchScoringService
         return postings.Count;
     }
 
-    private IQueryable<JobPosting> ConfirmedPostings(int ownerUserId) =>
+    /// <summary>
+    /// The postings this candidate's scores are built from (BR-08, BR-09).
+    ///
+    /// Keyed on whether extraction produced anything, not on whether the candidate has
+    /// pressed Confirm. Status cannot carry that question on its own: a successful run
+    /// leaves the posting at New (see BuildSucceededRun), so New means both "never
+    /// extracted" and "extracted fine, not yet reviewed". Only the second of those is
+    /// scoreable, and only the extraction run knows which one it is.
+    ///
+    /// Both signals are tested. RunStatus is the real one; the Status check is what keeps
+    /// BR-08 literally true if the two ever disagree.
+    ///
+    /// A posting with no extraction at all stays in. It has no skills and no stated
+    /// experience, so every component comes back null and OverallScore is null — recorded
+    /// as not measurable rather than excluded outright, which is what BR-10 already expects
+    /// of a null score. Inventing a zero here would break BR-02.
+    /// </summary>
+    private IQueryable<JobPosting> ScoreablePostings(int ownerUserId) =>
         _db.JobPostings
-            .Where(p => p.OwnerUserId == ownerUserId && p.Status == PostingStatus.Confirmed)
+            .Where(p => p.OwnerUserId == ownerUserId
+                        && p.Status != PostingStatus.Pending
+                        && !p.Extractions.Any(e => e.IsCurrent && e.RunStatus == ExtractionRunStatus.Failed))
             .Include(p => p.Skills)
             .Include(p => p.Extractions.Where(e => e.IsCurrent))
             .Include(p => p.Corrections);

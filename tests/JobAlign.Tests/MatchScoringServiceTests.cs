@@ -26,8 +26,47 @@ public class MatchScoringServiceTests
     }
 
     [Fact]
-    public async Task ScoreAsync_refuses_a_New_posting()
+    public async Task ScoreAsync_refuses_a_posting_whose_current_extraction_failed()
     {
+        await using var db = CreateContext();
+        await AddProfileAsync(db, 10, 3m);
+        // Status left at New while the run failed: the two signals disagree, and the run wins.
+        var posting = await AddPostingAsync(db, 10, PostingStatus.New);
+        posting.Extractions.Add(FailedRun());
+        await db.SaveChangesAsync();
+        var service = new MatchScoringService(db);
+
+        var result = await service.ScoreAsync(posting.Id, 10);
+
+        Assert.Null(result);
+        Assert.Empty(db.MatchResults);
+    }
+
+    [Fact]
+    public async Task ScoreAsync_scores_an_extracted_posting_the_candidate_has_not_confirmed()
+    {
+        // A successful run leaves the posting at New. There is nothing left to wait for:
+        // the skills and the experience minimum are already known (BR-08).
+        await using var db = CreateContext();
+        var profile = await AddProfileAsync(db, 10, 4m);
+        profile.Skills.Add(ProfileSkill(1));
+        var posting = await AddPostingAsync(db, 10, PostingStatus.New, 3m);
+        posting.Skills.Add(PostingSkill(1, SkillType.Required, "c sharp"));
+        await db.SaveChangesAsync();
+        var service = new MatchScoringService(db);
+
+        var result = await service.ScoreAsync(posting.Id, 10);
+
+        Assert.NotNull(result);
+        Assert.Equal(100m, result!.RequiredSkillScore);
+        Assert.Equal(100m, result.ExperienceScore);
+    }
+
+    [Fact]
+    public async Task ScoreAsync_records_an_unextracted_posting_as_not_measurable()
+    {
+        // Nothing has been extracted, so there is nothing to measure. A null score says
+        // that; a zero would be inventing a fact the posting never stated (BR-02, BR-10).
         await using var db = CreateContext();
         await AddProfileAsync(db, 10, 3m);
         var posting = await AddPostingAsync(db, 10, PostingStatus.New);
@@ -35,8 +74,34 @@ public class MatchScoringServiceTests
 
         var result = await service.ScoreAsync(posting.Id, 10);
 
-        Assert.Null(result);
-        Assert.Empty(db.MatchResults);
+        Assert.NotNull(result);
+        Assert.Null(result!.RequiredSkillScore);
+        Assert.Null(result.PreferredSkillScore);
+        Assert.Null(result.ExperienceScore);
+        Assert.Null(result.OverallScore);
+    }
+
+    [Fact]
+    public async Task ScoreAsync_still_scores_a_confirmed_posting_that_was_re_extracted()
+    {
+        // Re-running extraction sends a Confirmed posting back to New. Keying on status
+        // alone would silently drop it out of scoring and leave its stored score to rot.
+        await using var db = CreateContext();
+        var profile = await AddProfileAsync(db, 10, 4m);
+        profile.Skills.Add(ProfileSkill(1));
+        var posting = await AddPostingAsync(db, 10, PostingStatus.Confirmed, 3m);
+        posting.Skills.Add(PostingSkill(1, SkillType.Required, "c sharp"));
+        posting.ConfirmedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        posting.Status = PostingStatus.New;          // what BuildSucceededRun does
+        await db.SaveChangesAsync();
+        var service = new MatchScoringService(db);
+
+        var result = await service.ScoreAsync(posting.Id, 10);
+
+        Assert.NotNull(result);
+        Assert.Equal(100m, result!.RequiredSkillScore);
     }
 
     [Fact]
@@ -153,7 +218,7 @@ public class MatchScoringServiceTests
     }
 
     [Fact]
-    public async Task RecalculateAll_rescores_every_confirmed_posting()
+    public async Task RecalculateAll_rescores_every_scoreable_posting()
     {
         await using var db = CreateContext();
         var profile = await AddProfileAsync(db, 10, 2m);
@@ -163,17 +228,19 @@ public class MatchScoringServiceTests
         first.Skills.Add(PostingSkill(1, SkillType.Required, "c sharp"));
         var second = await AddPostingAsync(db, 10, PostingStatus.Confirmed);
         second.Skills.Add(PostingSkill(2, SkillType.Preferred, "Docker"));
-        await AddPostingAsync(db, 10, PostingStatus.Pending);
-        await AddPostingAsync(db, 10, PostingStatus.New);
-        await AddPostingAsync(db, 99, PostingStatus.Confirmed);
+        await AddPostingAsync(db, 10, PostingStatus.Pending);      // failed run: excluded
+        var unconfirmed = await AddPostingAsync(db, 10, PostingStatus.New);   // extracted-or-not: included
+        await AddPostingAsync(db, 99, PostingStatus.Confirmed);    // another user: excluded
         await db.SaveChangesAsync();
         var service = new MatchScoringService(db);
 
         var count = await service.RecalculateAllAsync(10);
 
-        Assert.Equal(2, count);
+        Assert.Equal(3, count);
         var results = await db.MatchResults.OrderBy(r => r.JobPostingId).ToListAsync();
-        Assert.Equal(2, results.Count);
+        Assert.Equal(3, results.Count);
+        // Included, but with nothing to measure against (BR-02, BR-10).
+        Assert.Null(results.Single(r => r.JobPostingId == unconfirmed.Id).OverallScore);
         Assert.Equal(100m, results.Single(r => r.JobPostingId == first.Id).RequiredSkillScore);
         Assert.Equal(0m, results.Single(r => r.JobPostingId == second.Id).PreferredSkillScore);
         Assert.All(results, result => Assert.Equal(ScoringWeights.Version, result.ScoringConfigVersion));
@@ -235,6 +302,15 @@ public class MatchScoringServiceTests
 
         return posting;
     }
+
+    private static PostingExtraction FailedRun() => new()
+    {
+        IsCurrent = true,
+        RunStatus = ExtractionRunStatus.Failed,
+        ExtractedAt = DateTimeOffset.UtcNow,
+        ExtractionConfigVersion = "test-v1",
+        FailureReason = "Extractor unavailable."
+    };
 
     private static ProfileSkill ProfileSkill(int masterSkillId) => new()
     {
