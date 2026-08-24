@@ -1,10 +1,13 @@
 using JobAlign.Core.Abstractions;
+using JobAlign.Infrastructure.Ai;
 using JobAlign.Infrastructure.Data;
 using JobAlign.Infrastructure.Extraction;
 using JobAlign.Infrastructure.Identity;
 using JobAlign.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace JobAlign.Infrastructure;
 
@@ -29,8 +32,17 @@ public static class DependencyInjection
         services.AddScoped<IAppEmailSender, LoggingEmailSender>();
 
         // --- Role A: extraction (build order step 3) ---
-        // StubExtractor until Member F lands AiExtractor behind the same interface (NFR-11).
-        services.AddScoped<IJobExtractor, StubExtractor>();
+        services.AddScoped<StubExtractor>();
+        services.AddScoped<AiExtractor>();
+
+        // Role F, build order step 4: swaps to AiExtractor once an API key is configured.
+        // Falls back to the stub when no key is present so the app still runs (NFR-06,
+        // role-f handout "Day-2 swap") — announced to the team before this line changed.
+        services.AddScoped<IJobExtractor>(sp =>
+            string.IsNullOrWhiteSpace(sp.GetRequiredService<IOptions<AiClientOptions>>().Value.ApiKey)
+                ? sp.GetRequiredService<StubExtractor>()
+                : sp.GetRequiredService<AiExtractor>());
+
         services.AddScoped<IExtractionService, ExtractionService>();
 
         // --- Role B: master skills, aliases, resolution (FR-14, FR-29, FR-57, FR-58) ---
@@ -48,6 +60,24 @@ public static class DependencyInjection
         // --- Role D: confirmed-posting match scoring (FR-35 to FR-43) ---
         // Registered after Role C: a profile change rescores the library (FR-41).
         services.AddScoped<IMatchScoringService, MatchScoringService>();
+
+        // --- Role F: AI client — extraction (above) and feedback (FR-44, FR-48, NFR-09, NFR-11) ---
+        // IConfiguration is already in the service collection courtesy of WebApplicationBuilder,
+        // so this binds without JobAlign.Infrastructure taking a reference to ASP.NET (shared brief §2).
+        services.AddOptions<AiClientOptions>()
+            .Configure<IConfiguration>((options, configuration) =>
+                configuration.GetSection(AiClientOptions.SectionName).Bind(options));
+
+        services.AddHttpClient<AnthropicClient>();
+
+        services.AddScoped<StubFeedbackGenerator>();
+        services.AddScoped<AiFeedbackGenerator>();
+
+        // Same no-key fallback as IJobExtractor above — nobody is blocked on an API key.
+        services.AddScoped<IFeedbackGenerator>(sp =>
+            string.IsNullOrWhiteSpace(sp.GetRequiredService<IOptions<AiClientOptions>>().Value.ApiKey)
+                ? sp.GetRequiredService<StubFeedbackGenerator>()
+                : sp.GetRequiredService<AiFeedbackGenerator>());
 
         return services;
     }
