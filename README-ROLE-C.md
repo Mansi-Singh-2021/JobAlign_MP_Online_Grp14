@@ -9,14 +9,12 @@ Story: US-02 — Candidate profile and skills.
 - `src/JobAlign.Infrastructure/Services/CandidateProfileService.cs`
 - `src/JobAlign.Web/Controllers/ProfileController.cs`
 - `src/JobAlign.Web/Models/Profile/ProfileViewModels.cs`
-- `src/JobAlign.Web/Views/Profile/Index.cshtml`
-- `src/JobAlign.Web/Views/Profile/Skills.cshtml`
-- `src/JobAlign.Web/Views/Profile/Experience.cshtml`
+- `src/JobAlign.Web/Views/Profile/Index.cshtml` (skills, education, experience, projects and certifications all live here)
 - `tests/JobAlign.Tests/CandidateProfileServiceTests.cs`
 
 ## DI
 
-See `DI-CHANGE.txt`. The shared `ICandidateProfileService` contract is unchanged. `IProfileEntryService` is an additional Role C seam for the FR-27 collection CRUD that is not exposed by the fixed shared contract.
+Registered in `src/JobAlign.Infrastructure/DependencyInjection.cs`. The shared `ICandidateProfileService` contract is unchanged. `IProfileEntryService` is an additional Role C seam for the FR-27 collection CRUD that is not exposed by the fixed shared contract.
 
 ## Run
 

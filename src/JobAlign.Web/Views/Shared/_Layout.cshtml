@@ -31,6 +31,9 @@
                             <li class="nav-item">
                                 <a class="nav-link text-dark" asp-controller="Postings" asp-action="Create">Add a posting</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Profile" asp-action="Index">My profile</a>
+                            </li>
                         }
                         @if (User.IsInRole(RoleNames.Administrator))
                         {

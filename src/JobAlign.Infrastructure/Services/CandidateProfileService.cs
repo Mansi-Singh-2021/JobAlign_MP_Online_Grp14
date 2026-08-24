@@ -1,3 +1,4 @@
+using System.Reflection;
 using JobAlign.Core.Abstractions;
 using JobAlign.Core.Entities.Profiles;
 using JobAlign.Core.Enums;
@@ -87,7 +88,7 @@ public sealed class CandidateProfileService : ICandidateProfileService, IProfile
             _db.ProfileSkills.Add(new ProfileSkill
             {
                 CandidateProfileId = profile.Id,
-                MasterSkillId = resolution.MasterSkillId.Value,
+                MasterSkillId = resolution.MasterSkillId!.Value,
                 ProficiencyLevel = level,
                 Source = ProfileSkillSource.Manual,
                 ConfirmedAt = DateTimeOffset.UtcNow
@@ -359,14 +360,19 @@ public sealed class CandidateProfileService : ICandidateProfileService, IProfile
 
         try
         {
-            var task = method.Invoke(scoring, [userId, cancellationToken]) as Task;
-            if (task is not null)
+            if (method.Invoke(scoring, [userId, cancellationToken]) is Task task)
                 await task;
         }
-        catch (TargetInvocationException ex) when (ex.InnerException is not OperationCanceledException)
+        catch (Exception ex)
         {
+            // Invoke wraps a synchronous throw in TargetInvocationException, but a fault raised
+            // inside the awaited Task arrives unwrapped. Both shapes land here, so unwrap first.
+            var actual = (ex as TargetInvocationException)?.InnerException ?? ex;
+            if (actual is OperationCanceledException)
+                throw;
+
             // A scoring failure must not roll back an already-successful profile change (FR-41).
-            _logger.LogWarning(ex.InnerException, "Profile changed for user {UserId}, but match rescoring failed.", userId);
+            _logger.LogWarning(actual, "Profile changed for user {UserId}, but match rescoring failed.", userId);
         }
     }
 

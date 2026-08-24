@@ -38,6 +38,13 @@ public static class DependencyInjection
         services.AddScoped<MasterSkillSeeder>();
         services.AddScoped<ISkillAdminService, SkillAdminService>();
 
+        // --- Role C: candidate profile and skills (FR-27 to FR-29, FR-33, FR-34) ---
+        // One instance serves both seams, so a single unit of work covers a profile change
+        // and the experience recalculation it triggers.
+        services.AddScoped<CandidateProfileService>();
+        services.AddScoped<ICandidateProfileService>(sp => sp.GetRequiredService<CandidateProfileService>());
+        services.AddScoped<IProfileEntryService>(sp => sp.GetRequiredService<CandidateProfileService>());
+
         return services;
     }
 }

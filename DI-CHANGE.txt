@@ -1,6 +1,0 @@
-In src/JobAlign.Infrastructure/DependencyInjection.cs, inside AddJobAlignInfrastructure(), append after the existing Role B registrations:
-
-// --- Role C: candidate profile and skills (FR-27 to FR-29, FR-33, FR-34) ---
-services.AddScoped<CandidateProfileService>();
-services.AddScoped<ICandidateProfileService>(sp => sp.GetRequiredService<CandidateProfileService>());
-services.AddScoped<IProfileEntryService>(sp => sp.GetRequiredService<CandidateProfileService>());
