@@ -38,6 +38,9 @@ public static class DependencyInjection
         services.AddScoped<MasterSkillSeeder>();
         services.AddScoped<ISkillAdminService, SkillAdminService>();
 
+        // --- Role D: confirmed-posting match scoring (FR-35 to FR-43) ---
+        services.AddScoped<IMatchScoringService, MatchScoringService>();
+
         return services;
     }
 }
