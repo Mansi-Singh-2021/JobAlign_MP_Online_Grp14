@@ -318,6 +318,52 @@ public class SkillGapServiceTests
         Assert.Equal(skill2.Id, roadmap[1].MasterSkillId);
     }
 
+    /// <summary>
+    /// The roadmap has to be built from the same posting set that scoring uses. A posting
+    /// carrying a live score but missing from the roadmap built out of it is incoherent, and
+    /// that is exactly what a Confirmed-only filter produced once scoring stopped requiring
+    /// confirmation: a successful extraction leaves a posting at New.
+    /// </summary>
+    [Theory]
+    [InlineData(PostingStatus.New)]
+    [InlineData(PostingStatus.Confirmed)]
+    public async Task Roadmap_counts_every_posting_that_scoring_scores(PostingStatus status)
+    {
+        await using var db = CreateContext();
+        await AddProfileAsync(db, 10);
+        var posting = await AddPostingAsync(db, 10, status);
+        var skill = await AddMasterSkillAsync(db, 1, "C#");
+        await AddMatchResultWithGapsAsync(db, posting, (skill.Id, SkillType.Required));
+
+        var roadmap = await new SkillGapService(db).RebuildRoadmapAsync(10);
+
+        Assert.Contains(roadmap, r => r.MasterSkillId == skill.Id);
+    }
+
+    [Fact]
+    public async Task Roadmap_still_leaves_out_a_posting_whose_extraction_failed()
+    {
+        await using var db = CreateContext();
+        await AddProfileAsync(db, 10);
+        var posting = await AddPostingAsync(db, 10, PostingStatus.Pending);
+        posting.Extractions.Add(new PostingExtraction
+        {
+            IsCurrent = true,
+            RunStatus = ExtractionRunStatus.Failed,
+            ExtractedAt = DateTimeOffset.UtcNow,
+            ExtractionConfigVersion = "test-v1",
+            FailureReason = "Extractor unavailable."
+        });
+        await db.SaveChangesAsync();
+
+        var skill = await AddMasterSkillAsync(db, 1, "C#");
+        await AddMatchResultWithGapsAsync(db, posting, (skill.Id, SkillType.Required));
+
+        var roadmap = await new SkillGapService(db).RebuildRoadmapAsync(10);
+
+        Assert.DoesNotContain(roadmap, r => r.MasterSkillId == skill.Id);   // BR-08
+    }
+
     private static JobAlignDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<JobAlignDbContext>()

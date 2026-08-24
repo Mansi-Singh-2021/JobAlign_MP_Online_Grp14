@@ -52,11 +52,18 @@ public sealed class SkillGapService : ISkillGapService
         var existingStatusMap = existingItems
             .ToDictionary(r => r.MasterSkillId, r => (r.Status, r.CompletedAt));
 
-        // FR-45, FR-46, BR-08: Gaps across Confirmed postings only (Pending excluded)
+        // FR-45, FR-46, BR-08: gaps across everything that is scoreable — which is everything
+        // except a posting whose extraction failed. This has to be the same rule
+        // MatchScoringService.ScoreablePostings applies, or a posting can hold a live score
+        // while being invisible to the roadmap built from it. Confirmed-only was that bug:
+        // a successful extraction leaves a posting at New, so awaiting review silently
+        // dropped it from the aggregate.
         var gaps = await _db.SkillGaps
             .AsNoTracking()
             .Where(g => g.MatchResult.JobPosting.OwnerUserId == ownerUserId
-                        && g.MatchResult.JobPosting.Status == PostingStatus.Confirmed)
+                        && g.MatchResult.JobPosting.Status != PostingStatus.Pending
+                        && !g.MatchResult.JobPosting.Extractions.Any(
+                               e => e.IsCurrent && e.RunStatus == ExtractionRunStatus.Failed))
             .Include(g => g.MasterSkill)
             .ToListAsync(cancellationToken);
 

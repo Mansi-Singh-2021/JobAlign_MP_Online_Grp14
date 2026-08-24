@@ -50,3 +50,9 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.DS_Store
+
+# Claude Code tooling. launch.json is shared on purpose — it is how the app gets started
+# and is the same for everyone. Everything else under .claude/ is per-machine session and
+# permission state that would only cause churn.
+.claude/*
+!.claude/launch.json

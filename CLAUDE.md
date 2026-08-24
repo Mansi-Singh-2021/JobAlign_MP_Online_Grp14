@@ -15,6 +15,7 @@ When implementing, reference requirements by ID in commit messages and comments.
 - SQL Server
 - Bootstrap 5
 - External AI API for extraction, normalization, summarization and feedback
+  (Gemini by default, behind `IAiChatClient` — see build order step 4)
 
 > The original handoff specified .NET 8. This machine has no ASP.NET Core 8 runtime — a
 > `net8.0` web app builds but will not start. SRS §9.3 pins the stack (C#, ASP.NET Core MVC +
@@ -86,6 +87,12 @@ write the right code. Do not "simplify" these away.
 The SRS defines two, and conflating them breaks BR-08. They are separate columns:
 - `JobPosting.Status` — extraction lifecycle: `New` → `Pending` (on failure) → `Confirmed`.
   Only `Pending` is excluded from scoring, comparison and the dashboard (BR-08, FR-54).
+  `New` is not a statement about whether there is anything to score: a **successful**
+  extraction leaves a posting at `New` (it is confirmation that advances it), and
+  re-extracting a `Confirmed` posting returns it to `New`. So scoring keys on the current
+  extraction's `RunStatus`, not on `Status` — see `MatchScoringService.ScoreablePostings`.
+  `SkillGapService` must apply the same rule, or a posting can hold a score while being
+  missing from the roadmap built out of it.
 - `JobPosting.ApplicationStatus` — `Saved` / `Applied` / `Interview` / `Rejected` / `Closed` (FR-53).
 
 ### Nullable scores
@@ -139,7 +146,11 @@ Work in this sequence. Do not jump ahead.
 3. ~~`IJobExtractor` interface + `StubExtractor`. Wire the full review/correct UI
    against the stub.~~ (FR-12, FR-18, FR-19, FR-20, FR-21) **Done.** Extraction runs are
    history; corrections attach to the posting, so they survive a re-run (BR-03).
-4. `AiExtractor` real implementation behind the same interface. Keep the stub for tests.
+4. ~~`AiExtractor` real implementation behind the same interface. Keep the stub for tests.~~
+   **Done.** Provider is **Gemini** (`Ai:Provider`, default). `IAiChatClient` is the seam —
+   `GeminiClient` and `AnthropicClient` sit behind it, so changing provider is configuration,
+   not code. With no `Ai:ApiKey` configured the app falls back to `StubExtractor` and
+   `StubFeedbackGenerator`, so nobody is blocked on a key.
 5. ~~Master skills, aliases, skill resolution~~ (FR-14, FR-57, FR-58) **Done.**
    `MasterSkillSeeder` seeds 46 skills and 35 aliases at startup; `SkillResolver` does
    exact + alias lookup and follows merges; `/SkillsAdmin` covers add, edit, deactivate,
@@ -159,6 +170,13 @@ Work in this sequence. Do not jump ahead.
 - Controllers stay thin — business logic lives in `JobAlign.Core` services
 - Extraction runs as a background job, not a blocking request (NFR-01)
 - API keys in user-secrets locally, environment variables in deployment. Never in appsettings.json
+  ```bash
+  dotnet user-secrets set "Ai:ApiKey" "<key>" --project src/JobAlign.Web   # local
+  # deployment: Ai__ApiKey=<key>   (double underscore, not a colon)
+  ```
+  Provider, model and limits are not secrets and live in `appsettings.json` under `Ai`.
+  Model names move: `gemini-2.5-flash` was withdrawn mid-project. A withdrawn model is an
+  `Ai:Model` edit, never a code change.
   (the `JobAlignDb` connection string uses Windows auth and holds no secret)
 - One EF migration per logical schema change, named descriptively
 

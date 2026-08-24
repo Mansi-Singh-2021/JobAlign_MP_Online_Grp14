@@ -42,8 +42,14 @@ public sealed class AiExtractor : IJobExtractor
         _logger = logger;
     }
 
-    /// <summary>Bumped whenever the extraction prompt changes (NFR-08).</summary>
-    public string ConfigVersion => ExtractionPrompt.ConfigVersion;
+    /// <summary>
+    /// Stamped on every run so a stored extraction can be explained against what produced it
+    /// (NFR-08). Carries both halves that matter: which provider answered, and which version
+    /// of the prompt it was asked. A row reading "gemini-extraction-v1" is self-describing;
+    /// the prompt version alone left Gemini output labelled with a provider that never saw it.
+    /// Fits the 64-character column.
+    /// </summary>
+    public string ConfigVersion => $"{_client.ProviderName.ToLowerInvariant()}-{ExtractionPrompt.ConfigVersion}";
 
     public async Task<ExtractionOutcome> ExtractAsync(string rawText, CancellationToken cancellationToken = default)
     {

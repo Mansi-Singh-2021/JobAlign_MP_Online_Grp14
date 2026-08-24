@@ -11,7 +11,7 @@ namespace JobAlign.Infrastructure.Ai;
 public static class ExtractionPrompt
 {
     /// <summary>Bump this whenever <see cref="System"/> changes.</summary>
-    public const string ConfigVersion = "anthropic-sonnet5-v1";
+    public const string ConfigVersion = "extraction-v1";
 
     public const string System = """
         You extract structured information from a single job posting's raw text.
