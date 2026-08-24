@@ -5,6 +5,7 @@ using JobAlign.Core.Enums;
 using JobAlign.Core.Extraction;
 using JobAlign.Infrastructure.Ai.Dtos;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace JobAlign.Infrastructure.Ai;
 
@@ -30,12 +31,14 @@ public sealed class AiExtractor : IJobExtractor
         "not specified", "n/a", "na", "unknown", "tbd", "none", "null", ""
     };
 
-    private readonly AnthropicClient _client;
+    private readonly IAiChatClient _client;
+    private readonly AiClientOptions _options;
     private readonly ILogger<AiExtractor> _logger;
 
-    public AiExtractor(AnthropicClient client, ILogger<AiExtractor> logger)
+    public AiExtractor(IAiChatClient client, IOptions<AiClientOptions> options, ILogger<AiExtractor> logger)
     {
         _client = client;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -50,7 +53,8 @@ public sealed class AiExtractor : IJobExtractor
         var result = await _client.SendAsync(
             ExtractionPrompt.System,
             ExtractionPrompt.BuildUserMessage(rawText),
-            maxTokens: 2048,
+            maxTokens: _options.MaxOutputTokens,
+            AiResponseFormat.Json,
             cancellationToken);
 
         if (!result.Succeeded)
@@ -63,7 +67,15 @@ public sealed class AiExtractor : IJobExtractor
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "AI extraction response was not valid JSON.");
+            // The reply itself is the only useful evidence here, and without it this failure
+            // is undiagnosable from the logs. Bounded, because a runaway reply should not
+            // flood the log; it is posting content the owner already has, not a secret.
+            _logger.LogWarning(
+                ex,
+                "AI extraction response was not valid JSON. First {Length} characters: {Response}",
+                Math.Min(result.Text!.Length, 1000),
+                result.Text!.Length <= 1000 ? result.Text : result.Text[..1000]);
+
             return ExtractionOutcome.Failure("The AI service returned a response that could not be parsed.");
         }
 

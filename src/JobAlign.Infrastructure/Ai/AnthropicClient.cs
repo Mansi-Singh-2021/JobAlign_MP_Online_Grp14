@@ -11,14 +11,14 @@ namespace JobAlign.Infrastructure.Ai;
 /// There is no official .NET SDK, so a typed <see cref="HttpClient"/> is the right amount
 /// of machinery (role-f handout, "Provider"). This is the only class in the project that
 /// knows the wire format; <see cref="AiExtractor"/> and <see cref="AiFeedbackGenerator"/>
-/// depend on <see cref="AnthropicResult"/>, not on HTTP or JSON shapes.
+/// depend on <see cref="IAiChatClient"/> and <see cref="AiResult"/>, not on HTTP or JSON shapes.
 ///
 /// Never throws for a provider problem (NFR-06) — every failure mode (timeout, non-2xx,
-/// missing key, cancelled) comes back as <see cref="AnthropicResult.Failure"/> with a
+/// missing key, cancelled) comes back as <see cref="AiResult.Failure"/> with a
 /// reason a caller can store and show. One retry on a timeout or 429/5xx, with a short
 /// fixed backoff — not more, since NFR-01 gives the whole extraction 10 seconds.
 /// </summary>
-public sealed class AnthropicClient
+public sealed class AnthropicClient : IAiChatClient
 {
     private readonly HttpClient _httpClient;
     private readonly AiClientOptions _options;
@@ -37,14 +37,17 @@ public sealed class AnthropicClient
     /// Sends one message and returns the concatenated text content of the reply.
     /// Retries exactly once on a timeout, a 429, or a 5xx.
     /// </summary>
-    public async Task<AnthropicResult> SendAsync(
+    public string ProviderName => "Anthropic";
+
+    public async Task<AiResult> SendAsync(
         string systemPrompt,
         string userMessage,
         int maxTokens,
+        AiResponseFormat responseFormat,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
-            return AnthropicResult.Failure("No Anthropic API key is configured.");
+            return AiResult.Failure("No Anthropic API key is configured.");
 
         var attempt = 0;
 
@@ -61,7 +64,7 @@ public sealed class AnthropicClient
         }
     }
 
-    private async Task<(AnthropicResult Result, bool ShouldRetry)> SendOnceAsync(
+    private async Task<(AiResult Result, bool ShouldRetry)> SendOnceAsync(
         string systemPrompt,
         string userMessage,
         int maxTokens,
@@ -72,9 +75,12 @@ public sealed class AnthropicClient
 
         try
         {
+            // responseFormat is not plumbed through: the Messages API has no constrained-JSON
+            // mode, so the JSON contract rests on the prompt and AiExtractor's fence-stripping
+            // fallback, exactly as it did before the seam existed.
             var requestBody = new
             {
-                model = _options.Model,
+                model = _options.ResolveModel(),
                 max_tokens = maxTokens,
                 system = systemPrompt,
                 messages = new[]
@@ -83,7 +89,7 @@ public sealed class AnthropicClient
                 }
             };
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, _options.BaseUrl)
+            using var request = new HttpRequestMessage(HttpMethod.Post, _options.ResolveBaseUrl())
             {
                 Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
             };
@@ -97,20 +103,20 @@ public sealed class AnthropicClient
                 var isRetryable = response.StatusCode == (HttpStatusCode)429 || (int)response.StatusCode >= 500;
                 var reason = $"Anthropic API returned {(int)response.StatusCode} {response.StatusCode}.";
                 _logger.LogWarning("Anthropic API call failed: {Reason}", reason);
-                return (AnthropicResult.Failure(reason), isRetryable);
+                return (AiResult.Failure(reason), isRetryable);
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             var text = ExtractText(body);
 
             return text is null
-                ? (AnthropicResult.Failure("Anthropic API response had no text content."), false)
-                : (AnthropicResult.Success(text), false);
+                ? (AiResult.Failure("Anthropic API response had no text content."), false)
+                : (AiResult.Success(text), false);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
             _logger.LogWarning("Anthropic API call timed out after {Timeout}s.", _options.TimeoutSeconds);
-            return (AnthropicResult.Failure("The AI service timed out."), true);
+            return (AiResult.Failure("The AI service timed out."), true);
         }
         catch (OperationCanceledException)
         {
@@ -120,7 +126,7 @@ public sealed class AnthropicClient
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "Anthropic API call failed with a network error.");
-            return (AnthropicResult.Failure("Could not reach the AI service."), true);
+            return (AiResult.Failure("Could not reach the AI service."), true);
         }
     }
 
@@ -155,15 +161,4 @@ public sealed class AnthropicClient
             return null;
         }
     }
-}
-
-/// <summary>Outcome of one call to the Anthropic API. Failure is a normal result, not an exception.</summary>
-public sealed class AnthropicResult
-{
-    public bool Succeeded { get; private init; }
-    public string? Text { get; private init; }
-    public string? FailureReason { get; private init; }
-
-    public static AnthropicResult Success(string text) => new() { Succeeded = true, Text = text };
-    public static AnthropicResult Failure(string reason) => new() { Succeeded = false, FailureReason = reason };
 }

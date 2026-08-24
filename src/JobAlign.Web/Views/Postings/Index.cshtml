@@ -157,7 +157,11 @@ else
                         @* FR-53: Application status selector *@
                         <div class="dropdown">
                             <button class="btn btn-sm dropdown-toggle py-1 px-2 border @(posting.ApplicationStatus == ApplicationStatus.Interview ? "btn-info text-dark" : posting.ApplicationStatus == ApplicationStatus.Applied ? "btn-primary" : posting.ApplicationStatus == ApplicationStatus.Rejected ? "btn-danger" : posting.ApplicationStatus == ApplicationStatus.Closed ? "btn-secondary" : "btn-light")"
-                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-popper-config='{"strategy":"fixed"}'>
+                                    @* strategy:fixed lifts the menu out of the .table-responsive scroll box.
+                                       Bootstrap positions a dropdown absolutely by default, so inside a container
+                                       with overflow:auto the menu is clipped and the container grows a scrollbar
+                                       instead of the menu floating over the page. *@
                                 @posting.ApplicationStatus
                             </button>
                             <ul class="dropdown-menu">

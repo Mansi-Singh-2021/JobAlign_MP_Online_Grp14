@@ -29,10 +29,10 @@ public sealed class AiFeedbackGenerator : IFeedbackGenerator
         Respond with ONLY the feedback paragraph itself — no heading, no markdown, no preamble.
         """;
 
-    private readonly AnthropicClient _client;
+    private readonly IAiChatClient _client;
     private readonly ILogger<AiFeedbackGenerator> _logger;
 
-    public AiFeedbackGenerator(AnthropicClient client, ILogger<AiFeedbackGenerator> logger)
+    public AiFeedbackGenerator(IAiChatClient client, ILogger<AiFeedbackGenerator> logger)
     {
         _client = client;
         _logger = logger;
@@ -42,7 +42,8 @@ public sealed class AiFeedbackGenerator : IFeedbackGenerator
     {
         var userMessage = BuildUserMessage(request);
 
-        var result = await _client.SendAsync(SystemPrompt, userMessage, maxTokens: 300, cancellationToken);
+        var result = await _client.SendAsync(
+            SystemPrompt, userMessage, maxTokens: 300, AiResponseFormat.Text, cancellationToken);
 
         if (!result.Succeeded)
         {

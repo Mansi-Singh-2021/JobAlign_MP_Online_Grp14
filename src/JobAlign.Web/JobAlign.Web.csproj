@@ -17,6 +17,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Local home for Ai:ApiKey. Without this, `dotnet user-secrets set` fails and the
+         only place left to put a key is appsettings.json, which is exactly what the
+         shared brief forbids. The id is a project identifier, not a secret; the values
+         live outside the repository under the user profile. -->
+    <UserSecretsId>jobalign-mp-online-grp14</UserSecretsId>
   </PropertyGroup>
 
 </Project>

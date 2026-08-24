@@ -32,7 +32,10 @@ public class AiExtractorTests
     }
 
     private static AiExtractor BuildExtractor(HttpMessageHandler handler, int timeoutSeconds = 30) =>
-        new(BuildClient(handler, timeoutSeconds), NullLogger<AiExtractor>.Instance);
+        new(BuildClient(handler, timeoutSeconds), TestOptions(), NullLogger<AiExtractor>.Instance);
+
+    private static IOptions<AiClientOptions> TestOptions() =>
+        Options.Create(new AiClientOptions { MaxOutputTokens = 2048 });
 
     /// <summary>Wraps model output text the way the real Anthropic Messages API does.</summary>
     private static HttpResponseMessage AnthropicEnvelope(string modelText)

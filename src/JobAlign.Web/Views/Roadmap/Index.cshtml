@@ -104,7 +104,11 @@ else
                         <td>
                             <div class="dropdown d-inline-block">
                                 <button class="btn btn-sm dropdown-toggle @(item.Status == RoadmapItemStatus.Completed ? "btn-success" : item.Status == RoadmapItemStatus.InProgress ? "btn-info text-dark" : "btn-outline-secondary")"
-                                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-popper-config='{"strategy":"fixed"}'>
+                                        @* strategy:fixed lifts the menu out of the .table-responsive scroll box.
+                                           Bootstrap positions a dropdown absolutely by default, so inside a container
+                                           with overflow:auto the menu is clipped and the container grows a scrollbar
+                                           instead of the menu floating over the page. *@
                                     @item.Status
                                 </button>
                                 <ul class="dropdown-menu">

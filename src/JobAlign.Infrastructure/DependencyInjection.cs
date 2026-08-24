@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<ISkillGapService, SkillGapService>();
 
         // --- Role F: AI client — extraction (above) and feedback (FR-44, FR-48, NFR-09, NFR-11) ---
+        // Provider is selected below from Ai:Provider; Gemini is the default.
         // IConfiguration is resolved optionally, not required. The web host always registers
         // it, but this method's only stated dependency is the connection string, and a bare
         // ServiceCollection (which is what the registration tests build) has no IConfiguration.
@@ -78,7 +79,17 @@ public static class DependencyInjection
                     ?.GetSection(AiClientOptions.SectionName)
                     .Bind(options));
 
+        // Both clients are typed HttpClients so each gets its own handler lifetime; only the
+        // one the configured provider names is ever resolved through IAiChatClient.
+        services.AddHttpClient<GeminiClient>();
         services.AddHttpClient<AnthropicClient>();
+
+        // The provider is a configuration choice, not a code change (NFR-11). AiExtractor
+        // and AiFeedbackGenerator depend on IAiChatClient and never learn which one answered.
+        services.AddScoped<IAiChatClient>(sp =>
+            sp.GetRequiredService<IOptions<AiClientOptions>>().Value.Provider == AiProvider.Anthropic
+                ? sp.GetRequiredService<AnthropicClient>()
+                : sp.GetRequiredService<GeminiClient>());
 
         services.AddScoped<StubFeedbackGenerator>();
         services.AddScoped<AiFeedbackGenerator>();

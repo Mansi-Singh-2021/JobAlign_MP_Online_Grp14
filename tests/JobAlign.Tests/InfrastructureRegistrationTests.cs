@@ -1,5 +1,6 @@
 using JobAlign.Core.Abstractions;
 using JobAlign.Infrastructure;
+using JobAlign.Infrastructure.Ai;
 using JobAlign.Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -62,6 +63,58 @@ public class InfrastructureRegistrationTests
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetService(contract));
+    }
+
+    /// <summary>
+    /// The provider is meant to be a configuration choice (NFR-11). If this stops holding,
+    /// the app silently talks to whichever provider happens to be registered first.
+    /// </summary>
+    [Theory]
+    [InlineData(AiProvider.Gemini, typeof(GeminiClient))]
+    [InlineData(AiProvider.Anthropic, typeof(AnthropicClient))]
+    public void The_configured_provider_decides_which_client_is_used(AiProvider provider, Type expected)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJobAlignInfrastructure("Server=(local);Database=JobAlign;Trusted_Connection=True;");
+        services.Configure<AiClientOptions>(o => o.Provider = provider);
+
+        using var sp = services.BuildServiceProvider(validateScopes: true);
+        using var scope = sp.CreateScope();
+
+        Assert.IsType(expected, scope.ServiceProvider.GetRequiredService<IAiChatClient>());
+    }
+
+    /// <summary>
+    /// Model names are a moving target — gemini-2.5-flash was withdrawn for new keys and the
+    /// API answered a live extraction with a 404 telling us so. Keep the unconfigured
+    /// fallback pointing at a Gemini model, so a deployment that sets only a key still works.
+    /// </summary>
+    [Fact]
+    public void An_unset_model_falls_back_to_a_gemini_model()
+    {
+        var options = new AiClientOptions { Provider = AiProvider.Gemini, Model = null };
+
+        Assert.StartsWith("gemini-", options.ResolveModel(), StringComparison.Ordinal);
+        Assert.StartsWith("https://generativelanguage.googleapis.com", options.ResolveBaseUrl(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_configured_model_always_wins_over_the_fallback()
+    {
+        // The fix for a withdrawn model must be an appsettings edit, never a code change.
+        var options = new AiClientOptions { Provider = AiProvider.Gemini, Model = "gemini-9.9-experimental" };
+
+        Assert.Equal("gemini-9.9-experimental", options.ResolveModel());
+    }
+
+    [Fact]
+    public void Gemini_is_the_default_provider_when_configuration_says_nothing()
+    {
+        using var provider = BuildProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<GeminiClient>(scope.ServiceProvider.GetRequiredService<IAiChatClient>());
     }
 
     [Fact]
