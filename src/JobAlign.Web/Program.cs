@@ -66,7 +66,13 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+// AllowAnonymous is required, not optional. MapStaticAssets registers each asset as an
+// endpoint, and endpoints are subject to the FallbackPolicy set above — so without this,
+// every stylesheet and script 302s to /Account/Login. The browser then receives an HTML
+// login page where it asked for CSS, discards it, and renders the whole site unstyled
+// while every page still "works". Nothing about NFR-04 wants bootstrap.min.css behind a
+// login: these files ship in wwwroot and are public by nature.
+app.MapStaticAssets().AllowAnonymous();
 
 app.MapControllerRoute(
     name: "default",
